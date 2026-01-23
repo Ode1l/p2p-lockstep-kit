@@ -1,0 +1,27 @@
+{
+  "name": "p2p-game-kit",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "dev": "tsup --watch",
+    "build": "tsup",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "format": "prettier -w ."
+  },
+  "devDependencies": {
+    "prettier": "^3.3.1",
+    "tsup": "^8.3.0",
+    "typescript": "^5.3.3"
+  }
+}
