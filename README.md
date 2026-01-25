@@ -150,6 +150,32 @@ Client A            Signaling Server             Client B
    |<======== Game Protocol messages =============>|
 ```
 
+DataChannel setup flow (code-level, real signaling via WebSocket):
+1) Both peers connect to the signaling server (WebSocket) and join the same room.
+2) Both peers create `RTCPeerConnection(iceConfig)`.
+3) Peer A creates the channel: `dcA = pcA.createDataChannel("game", dataChannelConfig)`.
+4) Peer B listens: `pcB.ondatachannel = (e) => { dcB = e.channel; }`.
+5) Peer A gathers ICE and forwards candidates through signaling:
+   - `pcA.onicecandidate = (e) => ws.send({ type: "ICE", to: "B", payload: e.candidate })`
+6) Peer B does the same:
+   - `pcB.onicecandidate = (e) => ws.send({ type: "ICE", to: "A", payload: e.candidate })`
+7) Peer A starts offer/answer and sends the offer through signaling:
+   - `offer = await pcA.createOffer()`
+   - `await pcA.setLocalDescription(offer)`
+   - `ws.send({ type: "OFFER", to: "B", payload: offer })`
+8) Peer B receives the offer via signaling and answers:
+   - `await pcB.setRemoteDescription(offer)`
+   - `answer = await pcB.createAnswer()`
+   - `await pcB.setLocalDescription(answer)`
+   - `ws.send({ type: "ANSWER", to: "A", payload: answer })`
+9) Peer A receives the answer via signaling and finalizes:
+   - `await pcA.setRemoteDescription(answer)`
+10) On signaling messages:
+   - `OFFER` -> `pc.setRemoteDescription(offer)`
+   - `ANSWER` -> `pc.setRemoteDescription(answer)`
+   - `ICE` -> `pc.addIceCandidate(candidate)`
+11) Use `dc.onopen` as the "ready" signal, then send game messages.
+
 ### 4.3 Game Protocol (DataChannel, v0.1)
 Purpose: in-game control + sync. Keep it minimal.
 

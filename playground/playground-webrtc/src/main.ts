@@ -23,8 +23,21 @@ injectStyles();
 const ui = getUIRefs();
 const peerState = createPeerState();
 
+const shouldLogToUI = (message: string) =>
+  message.startsWith("sent:") ||
+  message.startsWith("received:") ||
+  message.includes("pair created") ||
+  message.includes("DataChannel open");
+
 const handlers = {
-  log: (peer: PeerLabel, message: string) => logToUI(ui, peer, message),
+  log: (peer: PeerLabel, message: string) => {
+    // Keep detailed network logs in the console; UI log stays user-facing.
+    // eslint-disable-next-line no-console
+    console.log(`[Peer ${peer}] ${message}`);
+    if (shouldLogToUI(message)) {
+      logToUI(ui, peer, message);
+    }
+  },
   updatePcStatus: (peer: PeerLabel, state: RTCPeerConnectionState | "idle") =>
     updatePcStatusUI(ui, peer, state),
   updateDcStatus: (peer: PeerLabel, state: RTCDataChannelState | "idle") =>
