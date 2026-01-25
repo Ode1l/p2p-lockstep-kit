@@ -1,29 +1,17 @@
 import { createWebRTCTransport } from "../../../src/transport/webrtcTransport";
 import type { WebRTCTransport } from "../../../src/transport/webrtcTransport";
-import type { PeerLabel, PeerState } from "./types";
+import type { SignalingClient } from "./signaling";
+import type { PeerHandlers, PeerState } from "./types";
 
-export type RTCHandlers = {
-  log: (peer: PeerLabel, message: string) => void;
-  updatePcStatus: (peer: PeerLabel, state: RTCPeerConnectionState | "idle") => void;
-  updateDcStatus: (peer: PeerLabel, state: RTCDataChannelState | "idle") => void;
-  onReset?: () => void;
-};
-
-export type TransportState = {
-  transportA: WebRTCTransport | null;
-  transportB: WebRTCTransport | null;
+export type RTCControls = {
+  startOffer: () => Promise<void>;
+  dispose: () => void;
 };
 
 export const createPeerState = (): PeerState => ({
-  pcA: null,
-  pcB: null,
-  dcA: null,
-  dcB: null,
-});
-
-export const createTransportState = (): TransportState => ({
-  transportA: null,
-  transportB: null,
+  pc: null,
+  dc: null,
+  transport: null,
 });
 
 const mapTransportStateToDcState = (
@@ -46,97 +34,167 @@ const mapTransportStateToDcState = (
 };
 
 const wireTransport = (
-  peer: PeerLabel,
   transport: WebRTCTransport,
-  handlers: RTCHandlers,
+  handlers: PeerHandlers,
 ) => {
-  transport.on("state", ({ state }) =>
-    handlers.updateDcStatus(peer, mapTransportStateToDcState(state)),
-  );
-  transport.on("open", () => handlers.log(peer, "DataChannel open"));
-  transport.on("close", ({ reason }) => handlers.log(peer, `DataChannel close${reason ? `: ${reason}` : ""}`));
-  transport.on("error", ({ error }) => handlers.log(peer, `Transport error: ${String(error)}`));
-  transport.on("message", ({ data }) => handlers.log(peer, `received: ${data}`));
+  const unsubs = [
+    transport.on("state", ({ state }) =>
+      handlers.updateDcStatus(mapTransportStateToDcState(state)),
+    ),
+    transport.on("open", () => handlers.log("DataChannel open")),
+    transport.on("close", ({ reason }) =>
+      handlers.log(`DataChannel close${reason ? `: ${reason}` : ""}`),
+    ),
+    transport.on("error", ({ error }) =>
+      handlers.log(`Transport error: ${String(error)}`),
+    ),
+    transport.on("message", ({ data }) => handlers.log(`received: ${data}`)),
+    transport.on("log", ({ message }) => handlers.log(message)),
+  ];
+  return () => unsubs.forEach((off) => off());
 };
 
-export const closePair = (
-  peerState: PeerState,
-  transportState: TransportState,
-  handlers: RTCHandlers,
-) => {
-  transportState.transportA?.close("reset");
-  transportState.transportB?.close("reset");
-  transportState.transportA = null;
-  transportState.transportB = null;
+export const closePeer = (peerState: PeerState, handlers: PeerHandlers) => {
+  peerState.transport?.close("reset");
+  peerState.transport = null;
 
-  peerState.dcA?.close();
-  peerState.dcB?.close();
-  peerState.pcA?.close();
-  peerState.pcB?.close();
+  peerState.dc?.close();
+  peerState.pc?.close();
+  peerState.dc = null;
+  peerState.pc = null;
 
-  peerState.dcA = null;
-  peerState.dcB = null;
-  peerState.pcA = null;
-  peerState.pcB = null;
-
-  handlers.updatePcStatus("A", "idle");
-  handlers.updatePcStatus("B", "idle");
-  handlers.updateDcStatus("A", "idle");
-  handlers.updateDcStatus("B", "idle");
-  handlers.onReset?.();
+  handlers.updatePcStatus("idle");
+  handlers.updateDcStatus("idle");
 };
 
-export const createPair = async (
+export const createPeerConnection = (
   peerState: PeerState,
-  transportState: TransportState,
   iceConfig: RTCConfiguration,
   dataChannelConfig: RTCDataChannelInit,
-  handlers: RTCHandlers,
-) => {
-  closePair(peerState, transportState, handlers);
+  signaling: SignalingClient,
+  targetId: string,
+  handlers: PeerHandlers,
+): RTCControls => {
+  closePeer(peerState, handlers);
 
-  peerState.pcA = new RTCPeerConnection(iceConfig);
-  peerState.pcB = new RTCPeerConnection(iceConfig);
+  const pc = new RTCPeerConnection(iceConfig);
+  peerState.pc = pc;
 
-  peerState.pcA.onconnectionstatechange = () => {
-    handlers.updatePcStatus("A", peerState.pcA?.connectionState ?? "idle");
-    handlers.log("A", `connectionState=${peerState.pcA?.connectionState ?? "idle"}`);
+  let cleanupTransport = () => {};
+  let hasLocalChannel = false;
+  let makingOffer = false;
+
+  const attachChannel = (dc: RTCDataChannel) => {
+    peerState.dc = dc;
+    peerState.transport = createWebRTCTransport(dc, {
+      label: signaling.peerId,
+      logger: (msg) => handlers.log(msg),
+    });
+    cleanupTransport();
+    cleanupTransport = wireTransport(peerState.transport, handlers);
   };
-  peerState.pcB.onconnectionstatechange = () => {
-    handlers.updatePcStatus("B", peerState.pcB?.connectionState ?? "idle");
-    handlers.log("B", `connectionState=${peerState.pcB?.connectionState ?? "idle"}`);
+
+  pc.onconnectionstatechange = () => {
+    handlers.updatePcStatus(pc.connectionState);
+    handlers.log(`connectionState=${pc.connectionState}`);
   };
 
-  peerState.pcA.onicecandidate = (event) => {
-    if (event.candidate) {
-      void peerState.pcB?.addIceCandidate(event.candidate);
+  pc.oniceconnectionstatechange = () => {
+    handlers.log(`iceConnectionState=${pc.iceConnectionState}`);
+  };
+
+  pc.onicegatheringstatechange = () => {
+    handlers.log(`iceGatheringState=${pc.iceGatheringState}`);
+  };
+
+  pc.onicecandidate = (event) => {
+    if (!event.candidate) {
+      return;
+    }
+    signaling.send("ICE", targetId, event.candidate.toJSON());
+  };
+
+  pc.ondatachannel = (event) => {
+    handlers.log(`ondatachannel: ${event.channel.label}`);
+    attachChannel(event.channel);
+  };
+
+  const localChannel = pc.createDataChannel("game", dataChannelConfig);
+  hasLocalChannel = true;
+  handlers.log(`createDataChannel: ${localChannel.label}`);
+  attachChannel(localChannel);
+
+  const onOffer = signaling.on("offer", async ({ from, payload }) => {
+    if (from !== targetId) {
+      return;
+    }
+    try {
+      handlers.log(`offer received from ${from}`);
+      await pc.setRemoteDescription(payload);
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      signaling.send("ANSWER", targetId, answer);
+      handlers.log("answer sent");
+    } catch (err) {
+      handlers.log(`offer handling error: ${String(err)}`);
+    }
+  });
+
+  const onAnswer = signaling.on("answer", async ({ from, payload }) => {
+    if (from !== targetId) {
+      return;
+    }
+    try {
+      handlers.log(`answer received from ${from}`);
+      await pc.setRemoteDescription(payload);
+    } catch (err) {
+      handlers.log(`answer handling error: ${String(err)}`);
+    }
+  });
+
+  const onIce = signaling.on("ice", async ({ from, payload }) => {
+    if (from !== targetId) {
+      return;
+    }
+    try {
+      await pc.addIceCandidate(payload);
+    } catch (err) {
+      handlers.log(`ice handling error: ${String(err)}`);
+    }
+  });
+
+  const startOffer = async () => {
+    if (makingOffer) {
+      return;
+    }
+    if (!hasLocalChannel) {
+      handlers.log("startOffer blocked: no local channel");
+      return;
+    }
+    try {
+      makingOffer = true;
+      handlers.log("creating offer...");
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      signaling.send("OFFER", targetId, offer);
+      handlers.log("offer sent");
+    } catch (err) {
+      handlers.log(`offer error: ${String(err)}`);
+    } finally {
+      makingOffer = false;
     }
   };
-  peerState.pcB.onicecandidate = (event) => {
-    if (event.candidate) {
-      void peerState.pcA?.addIceCandidate(event.candidate);
-    }
+
+  handlers.updatePcStatus(pc.connectionState);
+  handlers.updateDcStatus(peerState.transport?.state === "open" ? "open" : "connecting");
+
+  return {
+    startOffer,
+    dispose: () => {
+      onOffer();
+      onAnswer();
+      onIce();
+      cleanupTransport();
+    },
   };
-
-  peerState.dcA = peerState.pcA.createDataChannel("game", dataChannelConfig);
-  transportState.transportA = createWebRTCTransport(peerState.dcA);
-  wireTransport("A", transportState.transportA, handlers);
-
-  peerState.pcB.ondatachannel = (event) => {
-    peerState.dcB = event.channel;
-    transportState.transportB = createWebRTCTransport(peerState.dcB);
-    wireTransport("B", transportState.transportB, handlers);
-  };
-
-  const offer = await peerState.pcA.createOffer();
-  await peerState.pcA.setLocalDescription(offer);
-  await peerState.pcB.setRemoteDescription(offer);
-  const answer = await peerState.pcB.createAnswer();
-  await peerState.pcB.setLocalDescription(answer);
-  await peerState.pcA.setRemoteDescription(answer);
-
-  handlers.updatePcStatus("A", peerState.pcA.connectionState);
-  handlers.updatePcStatus("B", peerState.pcB.connectionState);
-  handlers.log("A", "pair created; negotiating...");
-  handlers.log("B", "pair created; negotiating...");
 };

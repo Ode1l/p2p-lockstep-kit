@@ -1,6 +1,8 @@
 import { dataChannelConfig, iceConfig } from "./config";
-import { closePair, createPair, createPeerState, createTransportState } from "./rtc";
-import type { PeerLabel } from "./types";
+import { createPeerConnection, createPeerState, closePeer } from "./rtc";
+import { createSignalingClient } from "./signaling";
+import type { RTCControls } from "./rtc";
+import type { SignalingClient } from "./signaling";
 import {
   getUIRefs,
   injectStyles,
@@ -9,6 +11,8 @@ import {
   resetLogs,
   updateDcStatus as updateDcStatusUI,
   updatePcStatus as updatePcStatusUI,
+  updatePeers,
+  updateSignalState,
 } from "./ui";
 
 const app = document.querySelector<HTMLDivElement>("#app");
@@ -21,63 +25,144 @@ injectStyles();
 
 const ui = getUIRefs();
 const peerState = createPeerState();
-const transportState = createTransportState();
+
+let signaling: SignalingClient | null = null;
+let controls: RTCControls | null = null;
+let hasStartedOffer = false;
 
 const shouldLogToUI = (message: string) =>
-  message.startsWith("sent:") || message.startsWith("received:") || message.includes("open");
+  message.startsWith("sent:") ||
+  message.startsWith("received:") ||
+  message.includes("open") ||
+  message.includes("close") ||
+  message.includes("error");
 
 const handlers = {
-  log: (peer: PeerLabel, message: string) => {
-    // Detailed network logs go to the console; UI log stays user-facing.
+  log: (message: string) => {
     // eslint-disable-next-line no-console
-    console.log(`[Peer ${peer}] ${message}`);
+    console.log(message);
     if (shouldLogToUI(message)) {
-      logToUI(ui, peer, message);
+      logToUI(ui, message);
     }
   },
-  updatePcStatus: (peer: PeerLabel, state: RTCPeerConnectionState | "idle") =>
-    updatePcStatusUI(ui, peer, state),
-  updateDcStatus: (peer: PeerLabel, state: RTCDataChannelState | "idle") =>
-    updateDcStatusUI(ui, peer, state, peerState),
-  onReset: () => resetLogs(ui),
+  updatePcStatus: (state: RTCPeerConnectionState | "idle") =>
+    updatePcStatusUI(ui, state),
+  updateDcStatus: (state: RTCDataChannelState | "idle") =>
+    updateDcStatusUI(ui, state, peerState),
 };
 
-const sendMessage = (peer: PeerLabel) => {
-  const transport = peer === "A" ? transportState.transportA : transportState.transportB;
-  const input = peer === "A" ? ui.inputA : ui.inputB;
-  const text = input.value.trim();
+const disposeControls = () => {
+  controls?.dispose();
+  controls = null;
+  hasStartedOffer = false;
+};
+
+const connectSignaling = () => {
+  const url = ui.signalingUrlInput.value.trim();
+  const peerId = ui.peerIdInput.value.trim();
+  if (!url || !peerId) {
+    handlers.log("signaling blocked: url and peerId are required");
+    return;
+  }
+
+  signaling?.close();
+  signaling = createSignalingClient(url, peerId, (msg) => handlers.log(msg));
+
+  signaling.on("state", ({ state }) => updateSignalState(ui, state));
+  signaling.on("peers", ({ peers }) => {
+    updatePeers(ui, peers);
+    maybeStartOffer(peers);
+  });
+  signaling.on("error", ({ error }) => handlers.log(`signaling error: ${String(error)}`));
+  signaling.on("log", ({ message }) => handlers.log(message));
+};
+
+const maybeStartOffer = (peers: string[]) => {
+  if (!signaling || !controls || hasStartedOffer) {
+    return;
+  }
+  const targetId = ui.targetIdInput.value.trim();
+  if (!targetId || !peers.includes(targetId)) {
+    return;
+  }
+  const isInitiator = signaling.peerId < targetId;
+  if (!isInitiator) {
+    handlers.log(`waiting for offer from ${targetId}`);
+    return;
+  }
+  hasStartedOffer = true;
+  void controls.startOffer();
+};
+
+const connectPeer = () => {
+  if (!signaling || signaling.state !== "open") {
+    handlers.log("connect blocked: signaling is not open");
+    return;
+  }
+  const targetId = ui.targetIdInput.value.trim();
+  if (!targetId) {
+    handlers.log("connect blocked: targetId is required");
+    return;
+  }
+
+  disposeControls();
+  controls = createPeerConnection(
+    peerState,
+    iceConfig,
+    dataChannelConfig,
+    signaling,
+    targetId,
+    handlers,
+  );
+  maybeStartOffer(signaling.peers);
+};
+
+const resetPeer = () => {
+  disposeControls();
+  closePeer(peerState, handlers);
+  resetLogs(ui);
+};
+
+const sendMessage = () => {
+  const transport = peerState.transport;
+  const text = ui.input.value.trim();
   if (!text || !transport || transport.state !== "open") {
     return;
   }
   transport.send(text);
-  handlers.log(peer, `sent: ${text}`);
-  input.value = "";
+  handlers.log(`sent: ${text}`);
+  ui.input.value = "";
 };
 
-ui.createPairButton.addEventListener("click", () => {
-  void createPair(peerState, transportState, iceConfig, dataChannelConfig, handlers);
-});
-
-ui.resetPairButton.addEventListener("click", () => {
-  closePair(peerState, transportState, handlers);
-});
-
-ui.sendAButton.addEventListener("click", () => sendMessage("A"));
-ui.sendBButton.addEventListener("click", () => sendMessage("B"));
-
-ui.inputA.addEventListener("keydown", (event) => {
+ui.connectSignalButton.addEventListener("click", connectSignaling);
+ui.connectPeerButton.addEventListener("click", connectPeer);
+ui.resetPeerButton.addEventListener("click", resetPeer);
+ui.sendButton.addEventListener("click", sendMessage);
+ui.input.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
-    sendMessage("A");
+    sendMessage();
   }
 });
 
-ui.inputB.addEventListener("keydown", (event) => {
-  if (event.key === "Enter") {
-    sendMessage("B");
-  }
-});
+updateSignalState(ui, "idle");
+updatePeers(ui, []);
+handlers.updatePcStatus("idle");
+handlers.updateDcStatus("idle");
 
-handlers.updatePcStatus("A", "idle");
-handlers.updatePcStatus("B", "idle");
-handlers.updateDcStatus("A", "idle");
-handlers.updateDcStatus("B", "idle");
+// Debug hooks for DevTools console.
+(window as any).debugRTC = {
+  connectSignaling,
+  connectPeer,
+  resetPeer,
+  send: (msg: string) => {
+    ui.input.value = msg;
+    sendMessage();
+  },
+  state: () => ({
+    signaling: signaling?.state ?? "none",
+    peers: signaling?.peers ?? [],
+    pc: peerState.pc?.connectionState ?? "idle",
+    dc: peerState.dc?.readyState ?? "idle",
+    transport: peerState.transport?.state ?? "idle",
+  }),
+};

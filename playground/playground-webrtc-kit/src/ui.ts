@@ -1,18 +1,19 @@
-import type { PeerLabel, PeerState } from "./types";
+import type { PeerState } from "./types";
 
 export type UIRefs = {
-  createPairButton: HTMLButtonElement;
-  resetPairButton: HTMLButtonElement;
-  sendAButton: HTMLButtonElement;
-  sendBButton: HTMLButtonElement;
-  inputA: HTMLInputElement;
-  inputB: HTMLInputElement;
-  logA: HTMLPreElement;
-  logB: HTMLPreElement;
-  pcAText: HTMLSpanElement;
-  pcBText: HTMLSpanElement;
-  dcAText: HTMLSpanElement;
-  dcBText: HTMLSpanElement;
+  signalingUrlInput: HTMLInputElement;
+  peerIdInput: HTMLInputElement;
+  targetIdInput: HTMLInputElement;
+  connectSignalButton: HTMLButtonElement;
+  connectPeerButton: HTMLButtonElement;
+  resetPeerButton: HTMLButtonElement;
+  signalStateText: HTMLSpanElement;
+  peersText: HTMLSpanElement;
+  sendButton: HTMLButtonElement;
+  input: HTMLInputElement;
+  log: HTMLPreElement;
+  pcText: HTMLSpanElement;
+  dcText: HTMLSpanElement;
 };
 
 export const renderApp = (app: HTMLDivElement) => {
@@ -21,40 +22,52 @@ export const renderApp = (app: HTMLDivElement) => {
       <header class="hero">
         <div>
           <p class="eyebrow">Kit Demo</p>
-          <h1>WebRTC Transport Playground</h1>
-          <p class="sub">Loopback demo that uses the kit transport wrapper.</p>
+          <h1>WebRTC + Signaling Playground</h1>
+          <p class="sub">Open two tabs, set different peerIds, and connect via signaling.</p>
         </div>
         <div class="actions">
-          <button id="createPair" class="primary">Connect</button>
-          <button id="resetPair" class="ghost">Reset</button>
+          <button id="connectPeer" class="primary">Connect P2P</button>
+          <button id="resetPeer" class="ghost">Reset</button>
         </div>
       </header>
 
-      <section class="grid">
-        <article class="card" id="peerA">
-          <div class="card-header">
-            <h2>Peer A</h2>
-            <div class="status"><span id="pcAText">RTCPeerConnection: idle</span></div>
-            <div class="status"><span id="dcAText">DataChannel: idle</span></div>
+      <section class="panel">
+        <div class="row">
+          <label class="field">
+            <span>Signaling URL</span>
+            <input id="signalingUrl" type="text" value="ws://localhost:8787" />
+          </label>
+          <label class="field">
+            <span>Peer ID (me)</span>
+            <input id="peerId" type="text" placeholder="peer-a" />
+          </label>
+          <label class="field">
+            <span>Target Peer ID</span>
+            <input id="targetId" type="text" placeholder="peer-b" />
+          </label>
+          <div class="field actions-inline">
+            <span>Signaling</span>
+            <button id="connectSignal" class="ghost">Connect WS</button>
           </div>
-          <div class="controls">
-            <input id="inputA" type="text" placeholder="Type message from A..." />
-            <button id="sendA" class="primary" disabled>Send</button>
-          </div>
-          <pre id="logA" class="log"></pre>
-        </article>
+        </div>
+        <div class="meta">
+          <span id="signalState">Signaling: idle</span>
+          <span id="peers">Peers: -</span>
+        </div>
+      </section>
 
-        <article class="card" id="peerB">
+      <section class="grid">
+        <article class="card">
           <div class="card-header">
-            <h2>Peer B</h2>
-            <div class="status"><span id="pcBText">RTCPeerConnection: idle</span></div>
-            <div class="status"><span id="dcBText">DataChannel: idle</span></div>
+            <h2>Local Peer</h2>
+            <div class="status"><span id="pcText">RTCPeerConnection: idle</span></div>
+            <div class="status"><span id="dcText">DataChannel: idle</span></div>
           </div>
           <div class="controls">
-            <input id="inputB" type="text" placeholder="Type message from B..." />
-            <button id="sendB" class="primary" disabled>Send</button>
+            <input id="input" type="text" placeholder="Type message..." />
+            <button id="send" class="primary" disabled>Send</button>
           </div>
-          <pre id="logB" class="log"></pre>
+          <pre id="log" class="log"></pre>
         </article>
       </section>
     </div>
@@ -89,6 +102,9 @@ export const injectStyles = () => {
       max-width: 1100px;
       margin: 0 auto;
       padding: 48px 24px 64px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
     }
 
     .hero {
@@ -96,7 +112,7 @@ export const injectStyles = () => {
       justify-content: space-between;
       align-items: center;
       gap: 24px;
-      margin-bottom: 28px;
+      margin-bottom: 8px;
     }
 
     .eyebrow {
@@ -115,6 +131,41 @@ export const injectStyles = () => {
     .sub { margin: 0; color: var(--muted); }
 
     .actions { display: flex; gap: 10px; }
+
+    .panel {
+      background: var(--panel);
+      border-radius: 16px;
+      padding: 14px;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.06);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .actions-inline {
+      justify-content: flex-end;
+    }
+
+    .meta {
+      display: flex;
+      gap: 14px;
+      font-size: 12px;
+      color: var(--muted);
+    }
 
     button {
       border: 0;
@@ -140,7 +191,7 @@ export const injectStyles = () => {
     .grid {
       display: grid;
       gap: 18px;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      grid-template-columns: minmax(0, 1fr);
     }
 
     .card {
@@ -165,6 +216,7 @@ export const injectStyles = () => {
       border: 1px solid rgba(0, 0, 0, 0.15);
       font-size: 14px;
       background: #fff;
+      color: var(--ink);
     }
 
     .log {
@@ -172,18 +224,23 @@ export const injectStyles = () => {
       color: #eaeaea;
       border-radius: 12px;
       padding: 12px;
-      min-height: 140px;
-      max-height: 220px;
+      min-height: 160px;
+      max-height: 280px;
       overflow: auto;
       font-size: 12px;
       line-height: 1.5;
       margin: 0;
     }
 
+    @media (max-width: 960px) {
+      .row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
     @media (max-width: 720px) {
       .hero { flex-direction: column; align-items: flex-start; }
       .actions { width: 100%; }
       .actions button { flex: 1; }
+      .row { grid-template-columns: minmax(0, 1fr); }
       .controls { flex-direction: column; }
     }
   `;
@@ -191,60 +248,49 @@ export const injectStyles = () => {
 };
 
 export const getUIRefs = (): UIRefs => ({
-  createPairButton: document.querySelector<HTMLButtonElement>("#createPair")!,
-  resetPairButton: document.querySelector<HTMLButtonElement>("#resetPair")!,
-  sendAButton: document.querySelector<HTMLButtonElement>("#sendA")!,
-  sendBButton: document.querySelector<HTMLButtonElement>("#sendB")!,
-  inputA: document.querySelector<HTMLInputElement>("#inputA")!,
-  inputB: document.querySelector<HTMLInputElement>("#inputB")!,
-  logA: document.querySelector<HTMLPreElement>("#logA")!,
-  logB: document.querySelector<HTMLPreElement>("#logB")!,
-  pcAText: document.querySelector<HTMLSpanElement>("#pcAText")!,
-  pcBText: document.querySelector<HTMLSpanElement>("#pcBText")!,
-  dcAText: document.querySelector<HTMLSpanElement>("#dcAText")!,
-  dcBText: document.querySelector<HTMLSpanElement>("#dcBText")!,
+  signalingUrlInput: document.querySelector<HTMLInputElement>("#signalingUrl")!,
+  peerIdInput: document.querySelector<HTMLInputElement>("#peerId")!,
+  targetIdInput: document.querySelector<HTMLInputElement>("#targetId")!,
+  connectSignalButton: document.querySelector<HTMLButtonElement>("#connectSignal")!,
+  connectPeerButton: document.querySelector<HTMLButtonElement>("#connectPeer")!,
+  resetPeerButton: document.querySelector<HTMLButtonElement>("#resetPeer")!,
+  signalStateText: document.querySelector<HTMLSpanElement>("#signalState")!,
+  peersText: document.querySelector<HTMLSpanElement>("#peers")!,
+  sendButton: document.querySelector<HTMLButtonElement>("#send")!,
+  input: document.querySelector<HTMLInputElement>("#input")!,
+  log: document.querySelector<HTMLPreElement>("#log")!,
+  pcText: document.querySelector<HTMLSpanElement>("#pcText")!,
+  dcText: document.querySelector<HTMLSpanElement>("#dcText")!,
 });
 
 export const resetLogs = (ui: UIRefs) => {
-  ui.logA.textContent = "";
-  ui.logB.textContent = "";
+  ui.log.textContent = "";
 };
 
-export const log = (ui: UIRefs, peer: PeerLabel, message: string) => {
-  const target = peer === "A" ? ui.logA : ui.logB;
+export const log = (ui: UIRefs, message: string) => {
   const timestamp = new Date().toLocaleTimeString();
-  target.textContent += `[${timestamp}] ${message}\n`;
-  target.scrollTop = target.scrollHeight;
+  ui.log.textContent += `[${timestamp}] ${message}\n`;
+  ui.log.scrollTop = ui.log.scrollHeight;
 };
 
-export const updatePcStatus = (
-  ui: UIRefs,
-  peer: PeerLabel,
-  state: RTCPeerConnectionState | "idle",
-) => {
-  const text = `RTCPeerConnection: ${state}`;
-  if (peer === "A") {
-    ui.pcAText.textContent = text;
-    return;
-  }
-  ui.pcBText.textContent = text;
+export const updateSignalState = (ui: UIRefs, state: string) => {
+  ui.signalStateText.textContent = `Signaling: ${state}`;
+};
+
+export const updatePeers = (ui: UIRefs, peers: string[]) => {
+  ui.peersText.textContent = `Peers: ${peers.length ? peers.join(",") : "-"}`;
+};
+
+export const updatePcStatus = (ui: UIRefs, state: RTCPeerConnectionState | "idle") => {
+  ui.pcText.textContent = `RTCPeerConnection: ${state}`;
 };
 
 export const updateDcStatus = (
   ui: UIRefs,
-  peer: PeerLabel,
   state: RTCDataChannelState | "idle",
   peerState: PeerState,
 ) => {
-  const text = `DataChannel: ${state}`;
-  if (peer === "A") {
-    ui.dcAText.textContent = text;
-  } else {
-    ui.dcBText.textContent = text;
-  }
-
-  const isOpenA = peerState.dcA?.readyState === "open";
-  const isOpenB = peerState.dcB?.readyState === "open";
-  ui.sendAButton.disabled = !isOpenA;
-  ui.sendBButton.disabled = !isOpenB;
+  ui.dcText.textContent = `DataChannel: ${state}`;
+  const isOpen = peerState.transport?.state === "open";
+  ui.sendButton.disabled = !isOpen;
 };
