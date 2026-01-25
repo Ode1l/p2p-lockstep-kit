@@ -14,6 +14,19 @@ export const createPeerState = (): PeerState => ({
   dcB: null,
 });
 
+const describeCandidate = (candidate: RTCIceCandidate) => {
+  const c = candidate.candidate;
+  const typeMatch = c.match(/ typ ([a-z]+)/);
+  const addrMatch = c.match(
+    /candidate:\S+ \d+ (udp|tcp) \d+ ([^ ]+) (\d+) typ [a-z]+/i,
+  );
+  const typ = typeMatch?.[1] ?? "unknown";
+  const proto = addrMatch?.[1]?.toLowerCase() ?? "udp";
+  const addr = addrMatch?.[2] ?? "?";
+  const port = addrMatch?.[3] ?? "?";
+  return `${typ} ${proto} ${addr}:${port}`;
+};
+
 const setupDataChannel = (
   peer: PeerLabel,
   channel: RTCDataChannel,
@@ -25,6 +38,7 @@ const setupDataChannel = (
   channel.onmessage = (event) => {
     handlers.log(peer, `received: ${String(event.data)}`);
   };
+  handlers.log(peer, `DataChannel created: label=${channel.label}`);
   handlers.updateDcStatus(peer, channel.readyState);
 };
 
@@ -59,20 +73,47 @@ export const createPair = async (
 
   peerState.pcA.onicecandidate = (event) => {
     if (event.candidate) {
+      handlers.log("A", `ICE candidate -> B: ${describeCandidate(event.candidate)}`);
       void peerState.pcB?.addIceCandidate(event.candidate);
+      handlers.log("B", `ICE candidate added from A: ${describeCandidate(event.candidate)}`);
     }
   };
   peerState.pcB.onicecandidate = (event) => {
     if (event.candidate) {
+      handlers.log("B", `ICE candidate -> A: ${describeCandidate(event.candidate)}`);
       void peerState.pcA?.addIceCandidate(event.candidate);
+      handlers.log("A", `ICE candidate added from B: ${describeCandidate(event.candidate)}`);
     }
   };
 
   peerState.pcA.onconnectionstatechange = () => {
     handlers.updatePcStatus("A", peerState.pcA?.connectionState ?? "idle");
+    handlers.log("A", `connectionState=${peerState.pcA?.connectionState ?? "idle"}`);
   };
   peerState.pcB.onconnectionstatechange = () => {
     handlers.updatePcStatus("B", peerState.pcB?.connectionState ?? "idle");
+    handlers.log("B", `connectionState=${peerState.pcB?.connectionState ?? "idle"}`);
+  };
+
+  peerState.pcA.onsignalingstatechange = () => {
+    handlers.log("A", `signalingState=${peerState.pcA?.signalingState ?? "idle"}`);
+  };
+  peerState.pcB.onsignalingstatechange = () => {
+    handlers.log("B", `signalingState=${peerState.pcB?.signalingState ?? "idle"}`);
+  };
+
+  peerState.pcA.oniceconnectionstatechange = () => {
+    handlers.log("A", `iceConnectionState=${peerState.pcA?.iceConnectionState ?? "idle"}`);
+  };
+  peerState.pcB.oniceconnectionstatechange = () => {
+    handlers.log("B", `iceConnectionState=${peerState.pcB?.iceConnectionState ?? "idle"}`);
+  };
+
+  peerState.pcA.onicegatheringstatechange = () => {
+    handlers.log("A", `iceGatheringState=${peerState.pcA?.iceGatheringState ?? "idle"}`);
+  };
+  peerState.pcB.onicegatheringstatechange = () => {
+    handlers.log("B", `iceGatheringState=${peerState.pcB?.iceGatheringState ?? "idle"}`);
   };
 
   peerState.dcA = peerState.pcA.createDataChannel("chat", dataChannelConfig);
@@ -85,14 +126,17 @@ export const createPair = async (
 
   const offer = await peerState.pcA.createOffer();
   await peerState.pcA.setLocalDescription(offer);
+  handlers.log("A", `setLocalDescription: type=${offer.type}`);
   await peerState.pcB.setRemoteDescription(offer);
+  handlers.log("B", `setRemoteDescription: type=${offer.type}`);
   const answer = await peerState.pcB.createAnswer();
   await peerState.pcB.setLocalDescription(answer);
+  handlers.log("B", `setLocalDescription: type=${answer.type}`);
   await peerState.pcA.setRemoteDescription(answer);
+  handlers.log("A", `setRemoteDescription: type=${answer.type}`);
 
   handlers.updatePcStatus("A", peerState.pcA.connectionState);
   handlers.updatePcStatus("B", peerState.pcB.connectionState);
   handlers.log("A", "pair created; DataChannel negotiating...");
   handlers.log("B", "pair created; DataChannel negotiating...");
 };
-
