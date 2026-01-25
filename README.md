@@ -1,13 +1,12 @@
 # p2p-lockstep-kit Design Notes (v0.1, Turn-Based P2P)
 
-Goal: provide a browser-first P2P session and message protocol layer for turn-based games, wrapping WebRTC DataChannel (data plane) and WebSocket (signaling/control plane). Target games: gomoku, chess, mahjong, SanGuoSha, and other turn-based/strategy games.
+Goal: provide a browser-first P2P session and message protocol layer for turn-based games, wrapping WebRTC DataChannel (data plane) and WebSocket (signaling/control plane). Target games: gomoku, chess, mahjong, Three Kingdom, and other turn-based/strategy games.
 
 ---
 
 ## 1. Scope and Principles
 
 ### 1.1 Out of Scope
-- NAT traversal logic (ICE/STUN/TURN handled by WebRTC).
 - DHT / PubSub / IPFS.
 - Game rules or authoritative arbitration.
 - Server authority (server is only for control plane/signaling/room coordination).
@@ -42,7 +41,7 @@ One-line: Pure logic that routes messages, tracks seq, and emits events.
 - Envelope creation and parsing.
 - Seq tracking and sliding window de-dup.
 - Stream routing and event dispatch.
-- Light consistency helpers (hash checks -> desync signal).
+- Light consistency helpers (hash checks → desync signal).
 
 ### 2.4 Transport Layer
 One-line: A thin, uniform wrapper around WebRTC DataChannel IO.
@@ -121,10 +120,10 @@ Common envelope (event + payload, optional error):
 
 Core message types (minimal set):
 - ROOM_JOIN (client -> server)
-- ROOM_STATE (server -> clients, member list + roles)
+- ROOM_STATE (server → clients, member list + roles)
 - OFFER (client -> server -> peer, SDP offer)
 - ANSWER (client -> server -> peer, SDP answer)
-- ICE (client -> server -> peer, ICE candidate)
+- ICE (client → server → peer, ICE candidate)
 
 Error handling:
 - On failure, respond with the same `type` and an `error` object.
@@ -264,7 +263,7 @@ Not provided by WebSocket/WebRTC (you must build or decide):
 
 ### Milestone 6: /playground demos
 - signaling playground: room join + SDP/ICE exchange.
-- webrtc playground: DataChannel send/receive.
+- WebRTC playground: DataChannel send/receive.
 - gomoku demo: lockstep turns + sync restore.
 
 ---
