@@ -141,7 +141,7 @@ Client A            Signaling Server             Client B
    |<-- ROOM_STATE --------|-------- ROOM_STATE -->|
    |                       |                       |
    |--- OFFER (SDP) ------>|------- OFFER (SDP) -->|
-   |<-- ANSWER (SDP) ------|<------ ANSWER (SDP) ---|
+   |<-- ANSWER (SDP) ------|<------ ANSWER (SDP) --|
    |                       |                       |
    |--- ICE -------------->|-------- ICE --------->|
    |<-- ICE ---------------|<------- ICE ----------|
@@ -250,7 +250,7 @@ Not provided by WebSocket/WebRTC (you must build or decide):
     /gomoku-demo
   package.json
   tsconfig.json
-  tsup.config.ts
+  tsup.configuration.ts
   pnpm-workspace.yaml
 ```
 

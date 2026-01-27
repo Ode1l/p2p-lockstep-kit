@@ -4,9 +4,31 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>playground-webrtc</title>
+    <style>
+      body {
+        margin: 24px;
+        font-family: "Segoe UI", sans-serif;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+      #received {
+        padding: 10px;
+        background: #f5f5f5;
+        border-radius: 6px;
+        min-height: 120px;
+        white-space: pre-wrap;
+      }
+    </style>
   </head>
   <body>
-    <div id="app"></div>
+    <div class="row">
+      <label for="messageInput"></label><input id="messageInput" placeholder="Type a message" />
+      <button id="sendButton" disabled>Send</button>
+    </div>
+    <pre id="received"></pre>
     <script type="module" src="src/main.ts"></script>
   </body>
 </html>
