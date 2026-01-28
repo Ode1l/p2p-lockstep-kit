@@ -1,11 +1,16 @@
+import express from "express";
+import { randomUUID } from "crypto";
+import { createServer } from "http";
 import { WebSocket, WebSocketServer } from "ws";
 
-const port = 8787;
-const wss = new WebSocketServer({ port });
+import {signalingPort, iceServers} from "../configuration.json";
+
+const app = express();
+const server = createServer(app);
+const wss = new WebSocketServer({ server });
 
 // Map peerId -> socket for simple directed signaling.
 const peers = new Map<string, WebSocket>();
-const SIGNAL_TYPES = new Set(["OFFER", "ANSWER", "ICE", "PING"]);
 
 const send = (ws: WebSocket, msg: unknown) => {
   ws.send(JSON.stringify(msg));
@@ -25,88 +30,91 @@ const parseMessage = (raw: WebSocket.RawData): any | null => {
   }
 };
 
-const broadcastPeers = () => {
-  const list = [...peers.keys()];
-  const msg = { type: "PEERS", payload: { peers: list } };
-  for (const ws of peers.values()) {
-    if (isOpen(ws)) {
-      send(ws, msg);
-    }
+// User events: register
+const handleRegister = (ws: WebSocket) => {
+  const id = randomUUID();
+  peers.set(id, ws);
+  send(ws, {
+    type: 'REGISTERED',
+    to: id,
+    payload: {
+      id: 'iceServers',
+      data : iceServers
+    },
+    ts: Date.now(),
+  });
+  return id;
+};
+
+// Server events: relay
+const handleRelay = (ws: WebSocket, peerId: string, msg: any) => {
+  const to = msg.to ? String(msg.to) : "";
+  if (!to) {
+    sendError(ws, msg.type || "ERROR", "MISSING_TO", "to is required");
+    return;
   }
+
+  const target = peers.get(to);
+  if (!target || !isOpen(target)) {
+    sendError(ws, msg.type, "PEER_OFFLINE", `Peer not connected: ${to}`);
+    return;
+  }
+
+  send(target, {
+    type: "RELAY",
+    from: peerId,
+    to,
+    payload: msg.payload ?? null,
+    ts: Date.now(),
+  });
 };
 
 wss.on("connection", (ws: WebSocket) => {
   let peerId: string | null = null;
 
-  ws.on('message', (raw) => {
+  ws.on("message", (raw) => {
     const msg = parseMessage(raw);
     if (!msg) {
-      sendError(ws, 'ERROR', 'BAD_JSON', 'Invalid JSON');
+      sendError(ws, "ERROR", "BAD_JSON", "Invalid JSON");
       return;
     }
 
-    if (msg.type === 'HELLO') {
-      const id = String(msg.from || '').trim();
-      if (!id) {
-        sendError(ws, 'HELLO', 'MISSING_ID', 'from is required');
-        return;
+    if (msg.type === "REGISTER") {
+      const id = handleRegister(ws);
+      if (id) {
+        peerId = id;
       }
-      const existing = peers.get(id);
-      if (existing && existing !== ws && isOpen(existing)) {
-        sendError(ws, 'HELLO', 'ID_TAKEN', `peerId already in use: ${id}`);
-        return;
-      }
-      peerId = id;
-      peers.set(peerId, ws);
-      send(ws, { type: 'HELLO', payload: { peerId } });
-      broadcastPeers();
       return;
     }
 
     if (!peerId) {
-      sendError(ws, msg.type || 'ERROR', 'NOT_REGISTERED', 'Send HELLO first');
+      sendError(ws, msg.type || "ERROR", "NOT_REGISTERED", "Send HELLO first");
       return;
     }
 
-    if (!SIGNAL_TYPES.has(msg.type)) {
-      sendError(
-        ws,
-        msg.type || 'ERROR',
-        'UNSUPPORTED_TYPE',
-        'Unsupported message type',
-      );
+    if (msg.type === "RELAY") {
+      handleRelay(ws, peerId, msg);
       return;
     }
 
-    const to = msg.to ? String(msg.to) : '';
-    if (!to) {
-      sendError(ws, msg.type || 'ERROR', 'MISSING_TO', 'to is required');
-      return;
-    }
-
-    const target = peers.get(to);
-    if (!target || !isOpen(target)) {
-      sendError(ws, msg.type, 'PEER_OFFLINE', `Peer not connected: ${to}`);
-      return;
-    }
-
-    // Forward signaling messages as-is with minimal shaping.
-    send(target, {
-      type: msg.type,
-      from: peerId,
-      to,
-      payload: msg.payload ?? null,
-      ts: Date.now(),
-    });
+    sendError(
+      ws,
+      msg.type || "ERROR",
+      "UNSUPPORTED_TYPE",
+      "Unsupported message type",
+    );
   });
 
   ws.on("close", () => {
     if (peerId) {
       peers.delete(peerId);
-      broadcastPeers();
     }
   });
 });
 
-// eslint-disable-next-line no-console
-console.log(`[signaling-server] listening on ws://localhost:${port}`);
+server.listen(signalingPort, () => {
+  // eslint-disable-next-line no-console
+  console.log(
+    `[signaling-server] listening on http://localhost:${signalingPort}`,
+  );
+});

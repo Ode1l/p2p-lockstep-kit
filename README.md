@@ -104,77 +104,47 @@ Events:
 - desync
 
 ### 4.2 Signaling Protocol (WebSocket, v0.1)
-Purpose: rendezvous only (room + SDP/ICE). Keep it minimal.
+Purpose: register + relay only. Keep it minimal.
 
-Common envelope (event + payload, optional error):
+Common envelope (type + from/to + payload):
 ```json
 {
-  "type": "ROOM_JOIN",
-  "roomId": "roomId",
+  "type": "REGISTER",
   "from": "peerId",
   "to": "peerId?",
-  "payload": {},
-  "error": { "code": "ROOM_FULL", "msg": "Room is full" }
+  "payload": { "id": "", "data": "" }
 }
 ```
 
 Core message types (minimal set):
-- ROOM_JOIN (client -> server)
-- ROOM_STATE (server → clients, member list + roles)
-- OFFER (client -> server -> peer, SDP offer)
-- ANSWER (client -> server -> peer, SDP answer)
-- ICE (client → server → peer, ICE candidate)
+- REGISTER (client -> server)
+- REGISTERED (server -> client, returns generated peerId)
+- RELAY (client -> server -> peer, payload is forwarded as-is)
+- ERROR (server -> client, error info in payload)
 
-Error handling:
-- On failure, respond with the same `type` and an `error` object.
-- `error.code` is a short string (e.g. ROOM_FULL, NOT_FOUND, BAD_REQUEST).
+Notes:
+- Server only stores online peers and forwards RELAY messages.
+- If `to` is not online, server responds with ERROR (payload contains error info).
 
-Connection flow (game creation, two peers):
+Connection flow (two peers):
 
 ```
 Client A            Signaling Server             Client B
    |                       |                       |
    |--- WS connect ------->|<------ WS connect ----|
+   |--- REGISTER --------->|                       |
+   |<-- REGISTERED --------|                       |
+   |                       |<-------- REGISTER ---|
+   |                       |-------- REGISTERED -->|
    |                       |                       |
-   |--- ROOM_JOIN -------->|                       |
-   |                       |<-------- ROOM_JOIN ---|
-   |<-- ROOM_STATE --------|-------- ROOM_STATE -->|
-   |                       |                       |
-   |--- OFFER (SDP) ------>|------- OFFER (SDP) -->|
-   |<-- ANSWER (SDP) ------|<------ ANSWER (SDP) --|
-   |                       |                       |
-   |--- ICE -------------->|-------- ICE --------->|
-   |<-- ICE ---------------|<------- ICE ----------|
+   |--- RELAY(offer) ----->|---- RELAY(offer) ---->|
+   |<-- RELAY(answer) -----|<--- RELAY(answer) ----|
+   |--- RELAY(ice) --------|---- RELAY(ice) ------>|
+   |<-- RELAY(ice) --------|<--- RELAY(ice) -------|
    |                       |                       |
    |===== DataChannel open (P2P) ==================|
    |<======== Game Protocol messages =============>|
 ```
-
-DataChannel setup flow (code-level, real signaling via WebSocket):
-1) Both peers connect to the signaling server (WebSocket) and join the same room.
-2) Both peers create `RTCPeerConnection(iceConfig)`.
-3) Peer A creates the channel: `dcA = pcA.createDataChannel("game", dataChannelConfig)`.
-4) Peer B listens: `pcB.ondatachannel = (e) => { dcB = e.channel; }`.
-5) Peer A gathers ICE and forwards candidates through signaling:
-   - `pcA.onicecandidate = (e) => ws.send({ type: "ICE", to: "B", payload: e.candidate })`
-6) Peer B does the same:
-   - `pcB.onicecandidate = (e) => ws.send({ type: "ICE", to: "A", payload: e.candidate })`
-7) Peer A starts offer/answer and sends the offer through signaling:
-   - `offer = await pcA.createOffer()`
-   - `await pcA.setLocalDescription(offer)`
-   - `ws.send({ type: "OFFER", to: "B", payload: offer })`
-8) Peer B receives the offer via signaling and answers:
-   - `await pcB.setRemoteDescription(offer)`
-   - `answer = await pcB.createAnswer()`
-   - `await pcB.setLocalDescription(answer)`
-   - `ws.send({ type: "ANSWER", to: "A", payload: answer })`
-9) Peer A receives the answer via signaling and finalizes:
-   - `await pcA.setRemoteDescription(answer)`
-10) On signaling messages:
-   - `OFFER` -> `pc.setRemoteDescription(offer)`
-   - `ANSWER` -> `pc.setRemoteDescription(answer)`
-   - `ICE` -> `pc.addIceCandidate(candidate)`
-11) Use `dc.onopen` as the "ready" signal, then send game messages.
 
 ### 4.3 Game Protocol (DataChannel, v0.1)
 Purpose: in-game control + sync. Keep it minimal.
@@ -303,3 +273,13 @@ Not provided by WebSocket/WebRTC (you must build or decide):
 - Rollback extensions
 
 (end)
+
+---
+
+## ICE Candidates: When They Are Generated
+
+ICE candidates are generated **after you call `setLocalDescription()`**.  
+Once the local description is set, the browser automatically starts ICE gathering.
+Every time a new candidate is found, the browser fires an `icecandidate` event.
+This is why the event seems to happen “automatically”: the ICE agent runs in the background
+as part of WebRTC’s connection setup.

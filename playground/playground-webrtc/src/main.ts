@@ -1,20 +1,5 @@
 import { configuration } from './configuration';
-type RtcPeer = {
-  id: string;
-  pc: RTCPeerConnection;
-  dc: RTCDataChannel | null;
-  inbox: string[];
-  listenChannel: () => void;
-  linkIce: (target: RtcPeer) => void;
-  receiveIce: (candidate: RTCIceCandidate) => Promise<void>;
-  createOffer: () => Promise<RTCSessionDescriptionInit>;
-  acceptOffer: (
-    offer: RTCSessionDescriptionInit,
-  ) => Promise<RTCSessionDescriptionInit>;
-  acceptAnswer: (answer: RTCSessionDescriptionInit) => Promise<void>;
-  send: (data: string) => void;
-  close: () => void;
-};
+import { RtcPeer } from './peerType';
 
 
 const createRtcPeer = (id: string): RtcPeer => {
@@ -24,12 +9,22 @@ const createRtcPeer = (id: string): RtcPeer => {
   let pendingCandidates: RTCIceCandidate[] = [];
 
   // listen for connection state changes
-  pc.onconnectionstatechange = () => {
+  // auto read messages when connected
+  pc.addEventListener('connectionstatechange', (event) => {
     console.log(`[rtc:${id}] pc change. state: ${pc.connectionState}`);
-  };
+    console.log(`[rtc:${id}] ${event.type}`);
+    if (pc.connectionState === 'connected') {
+      // Peers connected!
+      // read msg
+      listenMessage();
+    }
+  });
 
-  const listenMessage = (channel: RTCDataChannel) => {
-    channel.onmessage = (event) => {
+  const listenMessage = () => {
+    if (!dc) {
+      return;
+    }
+    dc.onmessage = (event) => {
       const text = String(event.data);
       inbox.push(text);
       // eslint-disable-next-line no-console
@@ -40,7 +35,6 @@ const createRtcPeer = (id: string): RtcPeer => {
   const listenChannel = () => {
     pc.ondatachannel = (event) => {
       dc = event.channel;
-      listenMessage(event.channel);
     };
     // eslint-disable-next-line no-console
     console.log(`[rtc:${id}] listening for datachannel`);
@@ -49,7 +43,6 @@ const createRtcPeer = (id: string): RtcPeer => {
   const createOffer = async () => {
     dc = pc.createDataChannel('test', { ordered: true });
     console.log(`[rtc:${id}] created dataChannel`);
-    listenMessage(dc);
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     // eslint-disable-next-line no-console
@@ -104,7 +97,7 @@ const createRtcPeer = (id: string): RtcPeer => {
   };
 
   const send = (data: string) => {
-    if (!dc || dc.readyState !== "open") {
+    if (!dc || dc.readyState !== 'open') {
       // eslint-disable-next-line no-console
       console.warn(`[rtc:${id}] send blocked: dc not open`);
       return;
