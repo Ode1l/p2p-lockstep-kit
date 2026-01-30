@@ -1,4 +1,5 @@
-import type { PeerState } from "./state";
+import type { PeerEvent, PeerState } from "./state";
+import { nextState } from "./state";
 import type { SignalMessage } from "./signaling";
 
 type Signaling = {
@@ -8,6 +9,7 @@ type Signaling = {
 
 export type PeerApi = {
   connect: (targetId: string) => Promise<void>;
+  disconnect: () => void;
 };
 
 export class RtcPeer {
@@ -15,6 +17,7 @@ export class RtcPeer {
   private readonly pc: RTCPeerConnection;
   private dc: RTCDataChannel | null = null;
   private remoteId: string | null = null;
+  private requestedId: string | null = null;
   private state: PeerState = "passive";
   private readonly signaling: Signaling;
 
@@ -30,9 +33,7 @@ export class RtcPeer {
       // eslint-disable-next-line no-console
       console.log(`[rtc:${this.id}] state=${this.pc.connectionState}`);
       if (this.pc.connectionState === "connected") {
-        this.state = "connected";
-        // eslint-disable-next-line no-console
-        console.log(`[rtc:${this.id}] connected`);
+        this.dispatch("CONNECTED");
       }
     });
 
@@ -59,24 +60,17 @@ export class RtcPeer {
 
   public connect = async (targetId: string) => {
     if (this.state !== "passive") {
+      this.requestedId = targetId;
+      this.disconnect();
       return;
     }
-    this.state = "requesting";
     this.remoteId = targetId;
-    this.dc = this.pc.createDataChannel("game", { ordered: true });
-    this.bindDataChannel();
+    this.requestedId = null;
+    this.dispatch("CONNECT");
+  };
 
-    const offer = await this.pc.createOffer();
-    await this.pc.setLocalDescription(offer);
-    const msg: SignalMessage = {
-      from: this.id,
-      to: targetId,
-      type: "offer",
-      payload: offer,
-    };
-    // eslint-disable-next-line no-console
-    console.log(`[rtc:${this.id}] offer ->`, msg);
-    this.signaling.send(msg);
+  public disconnect = () => {
+    this.dispatch("DISCONNECT");
   };
 
   private bindDataChannel = () => {
@@ -111,6 +105,7 @@ export class RtcPeer {
         // eslint-disable-next-line no-console
         console.log(`[rtc:${this.id}] answer ->`, reply);
         this.signaling.send(reply);
+        this.dispatch("CONNECTED");
       },
       answer: async () => {
         await this.pc.setRemoteDescription(
@@ -118,6 +113,7 @@ export class RtcPeer {
         );
         // eslint-disable-next-line no-console
         console.log(`[rtc:${this.id}] answer <-`, message);
+        this.dispatch("CONNECTED");
       },
       ice: async () => {
         // eslint-disable-next-line no-console
@@ -128,6 +124,64 @@ export class RtcPeer {
 
     await handlers[message.type]();
   };
+
+  private dispatch = (event: PeerEvent) => {
+    const next = nextState(this.state, event);
+    if (this.state === next) {
+      return;
+    }
+    this.state = next;
+    // eslint-disable-next-line no-console
+    console.log(`[rtc:${this.id}] state -> ${next}`);
+
+    if (next === "requesting") {
+      if (this.requestedId) {
+        this.remoteId = this.requestedId;
+        this.requestedId = null;
+      }
+      void this.startOffer();
+      return;
+    }
+
+    if (next === "connected") {
+      this.bindDataChannel();
+    }
+
+    if (next === "passive") {
+      this.closeConnection();
+      if (this.requestedId) {
+        this.remoteId = this.requestedId;
+        this.requestedId = null;
+        this.dispatch("CONNECT");
+      }
+    }
+  };
+
+  private startOffer = async () => {
+    if (!this.remoteId) {
+      return;
+    }
+    this.dc = this.pc.createDataChannel("game", { ordered: true });
+    this.bindDataChannel();
+
+    const offer = await this.pc.createOffer();
+    await this.pc.setLocalDescription(offer);
+    const msg: SignalMessage = {
+      from: this.id,
+      to: this.remoteId,
+      type: "offer",
+      payload: offer,
+    };
+    // eslint-disable-next-line no-console
+    console.log(`[rtc:${this.id}] offer ->`, msg);
+    this.signaling.send(msg);
+  };
+
+  private closeConnection = () => {
+    this.dc?.close();
+    this.dc = null;
+    this.remoteId = null;
+  };
 }
 
 export const createPeer = (
@@ -136,5 +190,5 @@ export const createPeer = (
   signaling: Signaling,
 ): PeerApi => {
   const peer = new RtcPeer(id, pc, signaling);
-  return { connect: peer.connect };
+  return { connect: peer.connect, disconnect: peer.disconnect };
 };
