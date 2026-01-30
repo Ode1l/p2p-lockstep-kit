@@ -8,6 +8,6 @@ export type SignalMessage = {
 };
 
 export type SignalPayload = {
-  id?: string;
-  data?: unknown;
+  id: string;
+  data: unknown;
 };

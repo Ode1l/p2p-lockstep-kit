@@ -91,6 +91,8 @@ export class RtcPeer {
     const handlers: Record<SignalMessage["type"], () => Promise<void>> = {
       offer: async () => {
         this.remoteId = message.from;
+        // eslint-disable-next-line no-console
+        console.log(`[rtc:${this.id}] offer <-`, message);
         await this.pc.setRemoteDescription(
           message.payload as RTCSessionDescriptionInit,
         );
