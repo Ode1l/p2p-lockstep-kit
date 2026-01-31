@@ -3,13 +3,14 @@ import { nextState } from "./state";
 import type { SignalMessage } from "./signaling";
 
 type Signaling = {
-  send: (message: SignalMessage) => void;
-  register: (peerId: string, handler: (message: SignalMessage) => void) => void;
+  relay: (message: SignalMessage) => void;
+  on: (event: "signal", handler: (message: SignalMessage) => void) => void;
 };
 
 export type PeerApi = {
   connect: (targetId: string) => Promise<void>;
   disconnect: () => void;
+  send: (data: string) => void;
   getState: () => PeerState;
 };
 
@@ -26,7 +27,7 @@ export class RtcPeer {
     this.id = id;
     this.pc = pc;
     this.signaling = signaling;
-    this.signaling.register(id, (message) => {
+    this.signaling.on("signal", (message) => {
       void this.handleSignal(message);
     });
 
@@ -50,7 +51,7 @@ export class RtcPeer {
       };
       // eslint-disable-next-line no-console
       console.log(`[rtc:${this.id}] ice ->`, msg);
-      this.signaling.send(msg);
+      this.signaling.relay(msg);
     });
 
     this.pc.ondatachannel = (event) => {
@@ -72,6 +73,17 @@ export class RtcPeer {
 
   public disconnect = () => {
     this.dispatch("DISCONNECT");
+  };
+
+  public send = (data: string) => {
+    if (!this.dc || this.dc.readyState !== "open") {
+      // eslint-disable-next-line no-console
+      console.warn(`[rtc:${this.id}] send blocked: dc not open`);
+      return;
+    }
+    this.dc.send(data);
+    // eslint-disable-next-line no-console
+    console.log(`[rtc:${this.id}] sent:`, data);
   };
 
   public getState = () => this.state;
@@ -114,7 +126,7 @@ export class RtcPeer {
         };
         // eslint-disable-next-line no-console
         console.log(`[rtc:${this.id}] answer ->`, reply);
-        this.signaling.send(reply);
+        this.signaling.relay(reply);
         this.dispatch("CONNECTED");
       },
       answer: async () => {
@@ -184,7 +196,7 @@ export class RtcPeer {
     };
     // eslint-disable-next-line no-console
     console.log(`[rtc:${this.id}] offer ->`, msg);
-    this.signaling.send(msg);
+    this.signaling.relay(msg);
   };
 
   private closeConnection = () => {
@@ -200,5 +212,10 @@ export const createPeer = (
   signaling: Signaling,
 ): PeerApi => {
   const peer = new RtcPeer(id, pc, signaling);
-  return { connect: peer.connect, disconnect: peer.disconnect, getState: peer.getState };
+  return {
+    connect: peer.connect,
+    disconnect: peer.disconnect,
+    send: peer.send,
+    getState: peer.getState,
+  };
 };
