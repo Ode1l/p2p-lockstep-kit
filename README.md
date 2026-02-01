@@ -207,16 +207,15 @@ Not provided by WebSocket/WebRTC (you must build or decide):
 ```
 /ts-p2p-lockstep-kit
   /src
-    /controller
-    /session
+    /state
+    /wire (protocol + serialization)
     /transport
-    /rendezvous
-    /serialization
-    /protocol
-    index.ts
+    /signaling
+    index.ts (facade: register/connect/send/disconnect)
   /playground
     /playground-webrtc
     /playground-signaling
+    /playground-signaling-webrtc
     /gomoku-demo
   package.json
   tsconfig.json
@@ -234,18 +233,18 @@ Not provided by WebSocket/WebRTC (you must build or decide):
 - Connection flow diagram and responsibilities by layer.
 
 ### Milestone 1: /src/serialization + /src/protocol
-- JSON encode/decode helpers (v0.1).
-- Message type definitions and validation rules.
-- Round-trip examples in playground or simple tests.
+- JSON encode/decode helpers (v0.1). ✅
+- Message type definitions and validation rules. ✅
+- Round-trip examples in playground or simple tests. ✅ (playground-signaling)
 
 ### Milestone 2: /src/rendezvous
-- WebSocket client for ROOM_JOIN/ROOM_STATE/OFFER/ANSWER/ICE.
-- Simple event emitter for signaling events.
-- Basic reconnect strategy (optional for v0.1).
+- WebSocket client for REGISTER/RELAY. ✅
+- Simple event emitter for signaling events. ✅
+- Basic reconnect strategy (optional for v0.1). ☐
 
 ### Milestone 3: /src/transport
-- WebRTC DataChannel wrapper (send/receive bytes).
-- Connection state mapping (open/close/error).
+- WebRTC DataChannel wrapper (send/receive bytes). ✅
+- Connection state mapping (open/close/error). ✅ (basic)
 
 ### Milestone 4: /src/controller
 - seq de-dup and turn validation.
@@ -283,3 +282,17 @@ Once the local description is set, the browser automatically starts ICE gatherin
 Every time a new candidate is found, the browser fires an `icecandidate` event.
 This is why the event seems to happen “automatically”: the ICE agent runs in the background
 as part of WebRTC’s connection setup.
+
+---
+
+## Perfect Negotiation (MDN Summary)
+
+MDN’s “perfect negotiation” pattern exists to safely handle offer/answer collisions.
+Key ideas:
+- **Signal-driven**: you only set descriptions when a signaling message arrives.
+- **Role-based**: one side is “polite” (accepts collisions), the other “impolite” (ignores).
+- **Collision handling**: if an incoming offer collides with a local offer, the polite peer
+  rolls back and accepts the remote offer; the impolite peer ignores it.
+- **ICE exchange** runs in parallel and is delivered via the signaling channel.
+
+This keeps renegotiation stable when both peers try to negotiate at the same time.
