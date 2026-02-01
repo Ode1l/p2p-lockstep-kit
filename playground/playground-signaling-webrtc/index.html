@@ -6,7 +6,60 @@
     <title>playground-signaling-webrtc</title>
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app">
+      <div class="panel">
+        <h1>Signaling WebRTC</h1>
+        <div class="row">
+          <button id="registerBtn">Register</button>
+          <span class="label">Peer ID:</span>
+          <span id="peerId">-</span>
+        </div>
+        <div class="row">
+          <label for="targetId"></label><input id="targetId" placeholder="Target peer id" />
+          <button id="connectBtn">Connect</button>
+          <button id="disconnectBtn">Disconnect</button>
+        </div>
+        <div class="row">
+          <label for="message"></label><input id="message" placeholder="Message" />
+          <button id="sendBtn">Send</button>
+          <button id="stateBtn">PC State</button>
+        </div>
+        <pre id="log"></pre>
+      </div>
+    </div>
     <script type="module" src="src/main.ts"></script>
+    <style>
+      body {
+        margin: 24px;
+        font-family: "Segoe UI", sans-serif;
+      }
+      .panel {
+        max-width: 720px;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 12px;
+      }
+      input {
+        padding: 8px 10px;
+        min-width: 220px;
+      }
+      button {
+        padding: 8px 12px;
+      }
+      #log {
+        background: #111;
+        color: #e6e6e6;
+        padding: 12px;
+        min-height: 180px;
+        white-space: pre-wrap;
+      }
+      .label {
+        font-size: 12px;
+        color: #666;
+      }
+    </style>
   </body>
 </html>
