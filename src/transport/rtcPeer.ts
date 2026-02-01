@@ -23,11 +23,18 @@ export class RtcPeer {
   private requestedId: string | null = null;
   private state: PeerState = "passive";
   private readonly signaling: Signaling;
+  private readonly onMessage?: (data: unknown) => void;
 
-  public constructor(id: string, pc: RTCPeerConnection, signaling: Signaling) {
+  public constructor(
+    id: string,
+    pc: RTCPeerConnection,
+    signaling: Signaling,
+    onMessage?: (data: unknown) => void,
+  ) {
     this.id = id;
     this.pc = pc;
     this.signaling = signaling;
+    this.onMessage = onMessage;
 
     // Signal inbound messages (offer/answer/ice)
     this.signaling.on("signal", (message) => {
@@ -92,6 +99,9 @@ export class RtcPeer {
     if (!this.dc) {
       return;
     }
+    this.dc.onmessage = (event) => {
+      this.onMessage?.(event.data);
+    };
     this.dc.onclose = () => {
       this.dispatch("DISCONNECT");
     };
@@ -165,6 +175,7 @@ export class RtcPeer {
       return;
     }
     this.dc = this.pc.createDataChannel("game", { ordered: true });
+    this.bindDataChannel();
     const offer = await this.pc.createOffer();
     await this.pc.setLocalDescription(offer);
     const msg: SignalMessage = {
@@ -188,8 +199,9 @@ export const createRtcPeer = (
   id: string,
   pc: RTCPeerConnection,
   signaling: Signaling,
+  onMessage?: (data: unknown) => void,
 ): RtcPeerApi => {
-  const peer = new RtcPeer(id, pc, signaling);
+  const peer = new RtcPeer(id, pc, signaling, onMessage);
   return {
     connect: peer.connect,
     disconnect: peer.disconnect,

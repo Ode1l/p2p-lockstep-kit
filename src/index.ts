@@ -6,6 +6,7 @@ export type Facade = {
   connect: (targetId: string) => Promise<void>;
   send: (data: string) => void;
   disconnect: () => void;
+  onMessage: (handler: (data: unknown) => void) => void;
   pcState: () => {
     connectionState: RTCPeerConnectionState;
     iceConnectionState: RTCIceConnectionState;
@@ -16,12 +17,15 @@ export type Facade = {
 export const createClient = (): Facade => {
   const signaling = createSignalingClient();
   let peer: ReturnType<typeof createRtcPeer> | null = null;
+  let onMessageHandler: ((data: unknown) => void) | null = null;
 
   const register = async (url: string) => {
     await signaling.connect(url);
     const { peerId, iceServers } = await signaling.register();
     const pc = new RTCPeerConnection({ iceServers });
-    peer = createRtcPeer(peerId, pc, signaling);
+    peer = createRtcPeer(peerId, pc, signaling, (data) => {
+      onMessageHandler?.(data);
+    });
     return { peerId };
   };
 
@@ -40,6 +44,10 @@ export const createClient = (): Facade => {
     peer?.disconnect();
   };
 
+  const onMessage = (handler: (data: unknown) => void) => {
+    onMessageHandler = handler;
+  };
+
   const pcState = () => {
     const pc = peer?.getPc();
     return {
@@ -49,5 +57,5 @@ export const createClient = (): Facade => {
     };
   };
 
-  return { register, connect, send, disconnect, pcState };
+  return { register, connect, send, disconnect, onMessage, pcState };
 };

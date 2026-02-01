@@ -38,6 +38,10 @@ registerBtn.addEventListener("click", async () => {
   log(`[register] peerId=${peerId}`);
 });
 
+client.onMessage((data) => {
+  log(`[recv] ${String(data)}`);
+});
+
 connectBtn.addEventListener("click", async () => {
   const targetId = targetIdInput.value.trim();
   if (!targetId) {
