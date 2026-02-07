@@ -3,7 +3,7 @@ import { randomUUID } from "crypto";
 import { createServer } from "http";
 import { WebSocket, WebSocketServer } from "ws";
 
-import {signalingPort, iceServers} from "../configuration.json";
+import { signalingHost, signalingPort, iceServers } from "../configuration.json";
 
 const app = express();
 const server = createServer(app);
@@ -112,9 +112,9 @@ wss.on("connection", (ws: WebSocket) => {
   });
 });
 
-server.listen(signalingPort, () => {
+server.listen(signalingPort, signalingHost, () => {
   // eslint-disable-next-line no-console
   console.log(
-    `[signaling-server] listening on http://localhost:${signalingPort}`,
+    `[signaling-server] listening on http://${signalingHost}:${signalingPort}`,
   );
 });
