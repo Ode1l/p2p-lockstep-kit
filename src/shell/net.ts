@@ -1,5 +1,5 @@
-import { createClient } from '../../../../src';
-import type { Envelope, MessageType } from "./protocol";
+import { createClient } from "../index";
+import type { Envelope } from "./protocol";
 
 export type NetClient = {
   register: (url: string) => Promise<{ peerId: string }>;
@@ -44,7 +44,8 @@ export const createNetClient = (): NetClient => {
 };
 
 export const createEnvelope = <T>(
-  type: MessageType,
+  type: Envelope<T>["type"],
+  sid: string,
   from: string,
   seq: number,
   turn: number,
@@ -52,7 +53,7 @@ export const createEnvelope = <T>(
   stateHash?: string,
 ): Envelope<T> => ({
   type,
-  sid: "gomoku-demo",
+  sid,
   from,
   seq,
   turn,

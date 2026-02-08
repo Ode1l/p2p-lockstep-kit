@@ -70,6 +70,50 @@ One-line: The game-owned boundary for actions, snapshots, and hashes.
 
 ---
 
+## 2.8 Shell + Game Plugin (Demo Wiring)
+This repo now uses a simple Shell + GamePlugin split in the demos.
+
+Game plugin minimal contract (TypeScript):
+```ts
+export type GamePlugin = {
+  id: string;
+  title: string;
+  create: (ctx: GameContext) => GameInstance;
+};
+```
+
+Minimal wiring example:
+```ts
+import { createShell } from "./src/shell";
+import { gomokuPlugin } from "./playground/gomoku-demo/src/gomoku-plugin";
+import { createShellUi } from "./src/shell/ui";
+
+const ui = createShellUi();
+document.querySelector("#app")?.append(ui.elements.container);
+
+const shell = createShell({
+  mount: ui.elements.boardWrap,
+  plugin: gomokuPlugin,
+  ui: {
+    updatePanel: ui.updatePanel,
+  },
+});
+
+ui.panel.bindEvents({
+  onConnect: shell.onConnect,
+  onShare: () => {},
+});
+
+shell.start({ autoRegisterUrl: ui.panel.refs.signalUrl.value });
+```
+
+To add a new game, implement `GamePlugin` and swap the plugin import.
+Use `templates/game-plugin.ts` as a starting point.
+
+Shell will send a `HELLO` message on DataChannel connect with `gameId = sid`.
+If the remote gameId does not match, the connection is closed to avoid
+cross-game pairing.
+
 ## 3. Sync Model (Turn-Based First)
 
 ### 3.1 Choice

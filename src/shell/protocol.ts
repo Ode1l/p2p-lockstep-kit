@@ -1,13 +1,5 @@
 export type MessageType =
-  | "READY"
-  | "START"
-  | "UNDO_REQUEST"
-  | "UNDO_ACCEPT"
-  | "UNDO_REJECT"
-  | "RESTART_REQUEST"
-  | "RESTART_ACCEPT"
-  | "RESTART_REJECT"
-  | "RESULT"
+  | "HELLO"
   | "REJOIN"
   | "REJOIN_OK"
   | "SYNC_REQUEST"
@@ -17,7 +9,7 @@ export type MessageType =
 
 export type Envelope<T = unknown> = {
   type: MessageType;
-  sid: "gomoku-demo";
+  sid: string;
   from: string;
   seq: number;
   turn: number;
@@ -25,13 +17,8 @@ export type Envelope<T = unknown> = {
   payload?: T;
 };
 
-export type ReadyPayload = {
-  ready: boolean;
-};
-
-export type StartPayload = {
-  gameIndex: number;
-  blackIsCaller: boolean;
+export type HelloPayload = {
+  gameId: string;
 };
 
 export type MovePayload = {

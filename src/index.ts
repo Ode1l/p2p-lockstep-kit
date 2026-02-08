@@ -1,6 +1,6 @@
 import { createSignalingClient } from "./signaling/client";
 import { createRtcPeer } from "./transport/rtcPeer";
-import { clearSession, isExpired, loadSession, saveSession } from "./signaling/session";
+import { clearSession, loadSession, saveSession } from "./signaling/session";
 
 export type Facade = {
   register: (url: string) => Promise<{ peerId: string }>;
@@ -25,7 +25,7 @@ export const createClient = (): Facade => {
     const cached = loadSession();
     let result: { peerId: string; iceServers: RTCIceServer[]; resumeToken: string } | null =
       null;
-    if (cached && !isExpired(cached)) {
+    if (cached) {
       try {
         result = await signaling.resume({
           peerId: cached.peerId,
