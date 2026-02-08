@@ -1,5 +1,6 @@
 import { createSignalingClient } from "./signaling/client";
 import { createRtcPeer } from "./transport/rtcPeer";
+import { clearSession, isExpired, loadSession, saveSession } from "./signaling/session";
 
 export type Facade = {
   register: (url: string) => Promise<{ peerId: string }>;
@@ -21,12 +22,34 @@ export const createClient = (): Facade => {
 
   const register = async (url: string) => {
     await signaling.connect(url);
-    const { peerId, iceServers } = await signaling.register();
-    const pc = new RTCPeerConnection({ iceServers });
-    peer = createRtcPeer(peerId, pc, signaling, (data) => {
+    const cached = loadSession();
+    let result: { peerId: string; iceServers: RTCIceServer[]; resumeToken: string } | null =
+      null;
+    if (cached && !isExpired(cached)) {
+      try {
+        result = await signaling.resume({
+          peerId: cached.peerId,
+          resumeToken: cached.resumeToken,
+        });
+      } catch {
+        clearSession();
+      }
+    }
+    if (!result) {
+      result = await signaling.register();
+    }
+    if (result.resumeToken) {
+      saveSession({
+        peerId: result.peerId,
+        resumeToken: result.resumeToken,
+        updatedAt: Date.now(),
+      });
+    }
+    const pc = new RTCPeerConnection({ iceServers: result.iceServers });
+    peer = createRtcPeer(result.peerId, pc, signaling, (data) => {
       onMessageHandler?.(data);
     });
-    return { peerId };
+    return { peerId: result.peerId };
   };
 
   const connect = async (targetId: string) => {

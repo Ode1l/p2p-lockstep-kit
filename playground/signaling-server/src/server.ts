@@ -9,8 +9,20 @@ const app = express();
 const server = createServer(app);
 const wss = new WebSocketServer({ server });
 
-// Map peerId -> socket for simple directed signaling.
-const peers = new Map<string, WebSocket>();
+// Resume TTL is sliding:
+// - active connections are never purged
+// - disconnected sessions expire RESUME_TTL_MS after last activity/close
+const RESUME_TTL_MS = 10 * 60 * 1000;
+const CLEANUP_INTERVAL_MS = 60 * 1000;
+
+type PeerRecord = {
+  ws: WebSocket | null;
+  token: string;
+  updatedAt: number;
+};
+
+// Map peerId -> session record for simple directed signaling.
+const peers = new Map<string, PeerRecord>();
 
 const send = (ws: WebSocket, msg: unknown) => {
   ws.send(JSON.stringify(msg));
@@ -33,17 +45,58 @@ const parseMessage = (raw: WebSocket.RawData): any | null => {
 // User events: register
 const handleRegister = (ws: WebSocket) => {
   const id = randomUUID();
-  peers.set(id, ws);
+  const token = randomUUID();
+  peers.set(id, { ws, token, updatedAt: Date.now() });
   send(ws, {
-    type: 'REGISTERED',
+    type: "REGISTERED",
     to: id,
     payload: {
-      id: 'iceServers',
-      data : iceServers
+      id: "session",
+      data: { iceServers, resumeToken: token },
     },
     ts: Date.now(),
   });
   return id;
+};
+
+const handleResume = (ws: WebSocket, msg: any) => {
+  const data = msg?.payload?.data as { peerId?: string; resumeToken?: string } | undefined;
+  const requestedId = data?.peerId ? String(data.peerId) : "";
+  const resumeToken = data?.resumeToken ? String(data.resumeToken) : "";
+  if (!requestedId || !resumeToken) {
+    sendError(ws, msg.type || "ERROR", "BAD_RESUME", "peerId/token required");
+    return null;
+  }
+  const record = peers.get(requestedId);
+  if (!record) {
+    sendError(ws, msg.type || "ERROR", "SESSION_NOT_FOUND", "Unknown peerId");
+    return null;
+  }
+  if (Date.now() - record.updatedAt > RESUME_TTL_MS) {
+    peers.delete(requestedId);
+    sendError(ws, msg.type || "ERROR", "SESSION_EXPIRED", "Session expired");
+    return null;
+  }
+  if (record.token !== resumeToken) {
+    sendError(ws, msg.type || "ERROR", "BAD_TOKEN", "Invalid resume token");
+    return null;
+  }
+  if (record.ws && isOpen(record.ws)) {
+    sendError(ws, msg.type || "ERROR", "ALREADY_CONNECTED", "Peer is online");
+    return null;
+  }
+  record.ws = ws;
+  record.updatedAt = Date.now();
+  send(ws, {
+    type: "RESUMED",
+    to: requestedId,
+    payload: {
+      id: "session",
+      data: { iceServers, resumeToken: record.token },
+    },
+    ts: Date.now(),
+  });
+  return requestedId;
 };
 
 // Server events: relay
@@ -54,10 +107,15 @@ const handleRelay = (ws: WebSocket, peerId: string, msg: any) => {
     return;
   }
 
-  const target = peers.get(to);
+  const target = peers.get(to)?.ws ?? null;
   if (!target || !isOpen(target)) {
     sendError(ws, msg.type, "PEER_OFFLINE", `Peer not connected: ${to}`);
     return;
+  }
+
+  const senderRecord = peers.get(peerId);
+  if (senderRecord) {
+    senderRecord.updatedAt = Date.now();
   }
 
   send(target, {
@@ -87,6 +145,14 @@ wss.on("connection", (ws: WebSocket) => {
       return;
     }
 
+    if (msg.type === "RESUME") {
+      const id = handleResume(ws, msg);
+      if (id) {
+        peerId = id;
+      }
+      return;
+    }
+
     if (!peerId) {
       sendError(ws, msg.type || "ERROR", "NOT_REGISTERED", "Send HELLO first");
       return;
@@ -107,7 +173,11 @@ wss.on("connection", (ws: WebSocket) => {
 
   ws.on("close", () => {
     if (peerId) {
-      peers.delete(peerId);
+      const record = peers.get(peerId);
+      if (record) {
+        record.ws = null;
+        record.updatedAt = Date.now();
+      }
     }
   });
 });
@@ -118,3 +188,15 @@ server.listen(signalingPort, signalingHost, () => {
     `[signaling-server] listening on http://${signalingHost}:${signalingPort}`,
   );
 });
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, record] of peers) {
+    if (record.ws && isOpen(record.ws)) {
+      continue;
+    }
+    if (now - record.updatedAt > RESUME_TTL_MS) {
+      peers.delete(id);
+    }
+  }
+}, CLEANUP_INTERVAL_MS);

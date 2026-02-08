@@ -13,7 +13,11 @@ export type SignalMessage = {
 
 export type SignalingClient = {
   connect: (url: string) => Promise<void>;
-  register: () => Promise<{ peerId: string; iceServers: RTCIceServer[] }>;
+  register: () => Promise<{ peerId: string; iceServers: RTCIceServer[]; resumeToken: string }>;
+  resume: (session: {
+    peerId: string;
+    resumeToken: string;
+  }) => Promise<{ peerId: string; iceServers: RTCIceServer[]; resumeToken: string }>;
   relay: (message: SignalMessage) => void;
   on: (event: "signal", handler: (message: SignalMessage) => void) => void;
   off: (event: "signal", handler: (message: SignalMessage) => void) => void;
@@ -22,7 +26,7 @@ export type SignalingClient = {
 
 type SignalingEvents = {
   signal: SignalMessage;
-  registered: { peerId: string; iceServers: RTCIceServer[] };
+  registered: { peerId: string; iceServers: RTCIceServer[]; resumeToken: string };
   error: unknown;
 };
 
@@ -58,15 +62,29 @@ export const createSignalingClient = (): SignalingClient => {
         const msg = decoded.value;
 
         // Adapter: map wire protocol to internal events.
-        if (msg.type === "REGISTERED") {
+        if (msg.type === "ERROR") {
+          emitter.emit("error", msg);
+          return;
+        }
+
+        if (msg.type === "REGISTERED" || msg.type === "RESUMED") {
           peerId = msg.to ?? null;
           registeredPayload = msg.payload;
           if (peerId) {
-            const iceServers =
-              registeredPayload?.id === "iceServers"
-                ? (registeredPayload.data as RTCIceServer[])
-                : [];
-            emitter.emit("registered", { peerId, iceServers });
+            let iceServers: RTCIceServer[] = [];
+            let resumeToken = "";
+            if (registeredPayload?.id === "iceServers") {
+              iceServers = registeredPayload.data as RTCIceServer[];
+            }
+            if (registeredPayload?.id === "session") {
+              const data = registeredPayload.data as {
+                iceServers?: RTCIceServer[];
+                resumeToken?: string;
+              };
+              iceServers = data.iceServers ?? [];
+              resumeToken = data.resumeToken ?? "";
+            }
+            emitter.emit("registered", { peerId, iceServers, resumeToken });
           }
         }
 
@@ -83,19 +101,61 @@ export const createSignalingClient = (): SignalingClient => {
     });
 
   const register = () =>
-    new Promise<{ peerId: string; iceServers: RTCIceServer[] }>((resolve, reject) => {
+    new Promise<{ peerId: string; iceServers: RTCIceServer[]; resumeToken: string }>(
+      (resolve, reject) => {
       if (!ws || !ready) {
         reject(new Error("not connected"));
         return;
       }
       const msg: WireMessage = { type: "REGISTER" };
-      ws.send(encode(msg));
-      const onRegistered = (payload: { peerId: string; iceServers: RTCIceServer[] }) => {
+      const onRegistered = (payload: {
+        peerId: string;
+        iceServers: RTCIceServer[];
+        resumeToken: string;
+      }) => {
         emitter.off("registered", onRegistered);
+        emitter.off("error", onError);
         resolve(payload);
       };
+      const onError = (error: unknown) => {
+        emitter.off("registered", onRegistered);
+        emitter.off("error", onError);
+        reject(error instanceof Error ? error : new Error("signaling error"));
+      };
       emitter.on("registered", onRegistered);
-    });
+      emitter.on("error", onError);
+      ws.send(encode(msg));
+    },
+  );
+
+  const resume = (session: { peerId: string; resumeToken: string }) =>
+    new Promise<{ peerId: string; iceServers: RTCIceServer[]; resumeToken: string }>(
+      (resolve, reject) => {
+        if (!ws || !ready) {
+          reject(new Error("not connected"));
+          return;
+        }
+        const payload = { id: "resume", data: session };
+        const msg: WireMessage = { type: "RESUME", payload };
+        const onRegistered = (payload: {
+          peerId: string;
+          iceServers: RTCIceServer[];
+          resumeToken: string;
+        }) => {
+          emitter.off("registered", onRegistered);
+          emitter.off("error", onError);
+          resolve(payload);
+        };
+        const onError = (error: unknown) => {
+          emitter.off("registered", onRegistered);
+          emitter.off("error", onError);
+          reject(error instanceof Error ? error : new Error("resume failed"));
+        };
+        emitter.on("registered", onRegistered);
+        emitter.on("error", onError);
+        ws.send(encode(msg));
+      },
+    );
 
   const relay = (message: SignalMessage) => {
     if (!ws || !ready) {
@@ -116,5 +176,5 @@ export const createSignalingClient = (): SignalingClient => {
   const off = emitter.off.bind(emitter) as SignalingClient["off"];
   const state = () => ({ peerId, ready });
 
-  return { connect, register, relay, on, off, state };
+  return { connect, register, resume, relay, on, off, state };
 };

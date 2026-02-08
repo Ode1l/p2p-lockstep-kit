@@ -1,4 +1,10 @@
-export type SignalType = 'REGISTER' | 'REGISTERED' | 'ERROR' | 'RELAY';
+export type SignalType =
+  | "REGISTER"
+  | "REGISTERED"
+  | "RESUME"
+  | "RESUMED"
+  | "ERROR"
+  | "RELAY";
 
 export type SignalMessage = {
   type: SignalType;
