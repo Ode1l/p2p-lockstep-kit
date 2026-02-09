@@ -29,7 +29,7 @@ export const loadSession = (): SignalingSession | null => {
   }
   try {
     const data = JSON.parse(raw) as SignalingSession;
-    if (!data?.peerId || !data?.resumeToken || typeof data.updatedAt !== "number") {
+    if (!data?.peerId || !data?.resumeToken) {
       return null;
     }
     return data;
