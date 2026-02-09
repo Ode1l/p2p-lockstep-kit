@@ -8,6 +8,7 @@ export type PanelRefs = {
   peerId: HTMLSpanElement;
   status: HTMLSpanElement;
   gameTitle: HTMLSpanElement;
+  shareQr: HTMLCanvasElement;
   signalUrl: HTMLInputElement;
   targetId: HTMLInputElement;
 };
@@ -51,13 +52,23 @@ export const createPanel = () => {
     </div>
   `;
 
-  root.append(connectSection, statusSection);
+  const qrSection = document.createElement("div");
+  qrSection.className = "panel-section";
+  qrSection.innerHTML = `
+    <div class="panel-row">
+      <label>Share QR</label>
+      <canvas id="shareQr" width="160" height="160"></canvas>
+    </div>
+  `;
+
+  root.append(connectSection, statusSection, qrSection);
 
   const refs: PanelRefs = {
     root,
     peerId: root.querySelector("#myPeerId") as HTMLSpanElement,
     status: root.querySelector("#status") as HTMLSpanElement,
     gameTitle: root.querySelector("#gameTitle") as HTMLSpanElement,
+    shareQr: root.querySelector("#shareQr") as HTMLCanvasElement,
     signalUrl: root.querySelector("#signalUrl") as HTMLInputElement,
     targetId: root.querySelector("#targetId") as HTMLInputElement,
   };

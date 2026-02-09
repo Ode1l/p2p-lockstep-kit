@@ -30,8 +30,8 @@ const send = (ws: WebSocket, msg: unknown) => {
 
 const isOpen = (ws: WebSocket) => ws.readyState === ws.OPEN;
 
-const sendError = (ws: WebSocket, type: string, code: string, msg: string) => {
-  send(ws, { type, error: { code, msg } });
+const sendError = (ws: WebSocket, code: string, msg: string) => {
+  send(ws, { type: "ERROR", error: { code, msg } });
 };
 
 const parseMessage = (raw: WebSocket.RawData): any | null => {
@@ -64,25 +64,25 @@ const handleResume = (ws: WebSocket, msg: any) => {
   const requestedId = data?.peerId ? String(data.peerId) : "";
   const resumeToken = data?.resumeToken ? String(data.resumeToken) : "";
   if (!requestedId || !resumeToken) {
-    sendError(ws, msg.type || "ERROR", "BAD_RESUME", "peerId/token required");
+    sendError(ws, "BAD_RESUME", "peerId/token required");
     return null;
   }
   const record = peers.get(requestedId);
   if (!record) {
-    sendError(ws, msg.type || "ERROR", "SESSION_NOT_FOUND", "Unknown peerId");
+    sendError(ws, "SESSION_NOT_FOUND", "Unknown peerId");
     return null;
   }
   if (Date.now() - record.updatedAt > RESUME_TTL_MS) {
     peers.delete(requestedId);
-    sendError(ws, msg.type || "ERROR", "SESSION_EXPIRED", "Session expired");
+    sendError(ws, "SESSION_EXPIRED", "Session expired");
     return null;
   }
   if (record.token !== resumeToken) {
-    sendError(ws, msg.type || "ERROR", "BAD_TOKEN", "Invalid resume token");
+    sendError(ws, "BAD_TOKEN", "Invalid resume token");
     return null;
   }
   if (record.ws && isOpen(record.ws)) {
-    sendError(ws, msg.type || "ERROR", "ALREADY_CONNECTED", "Peer is online");
+    sendError(ws, "ALREADY_CONNECTED", "Peer is online");
     return null;
   }
   record.ws = ws;
@@ -103,13 +103,13 @@ const handleResume = (ws: WebSocket, msg: any) => {
 const handleRelay = (ws: WebSocket, peerId: string, msg: any) => {
   const to = msg.to ? String(msg.to) : "";
   if (!to) {
-    sendError(ws, msg.type || "ERROR", "MISSING_TO", "to is required");
+    sendError(ws, "MISSING_TO", "to is required");
     return;
   }
 
   const target = peers.get(to)?.ws ?? null;
   if (!target || !isOpen(target)) {
-    sendError(ws, msg.type, "PEER_OFFLINE", `Peer not connected: ${to}`);
+    sendError(ws, "PEER_OFFLINE", `Peer not connected: ${to}`);
     return;
   }
 
@@ -133,7 +133,7 @@ wss.on("connection", (ws: WebSocket) => {
   ws.on("message", (raw) => {
     const msg = parseMessage(raw);
     if (!msg) {
-      sendError(ws, "ERROR", "BAD_JSON", "Invalid JSON");
+      sendError(ws, "BAD_JSON", "Invalid JSON");
       return;
     }
 
@@ -154,7 +154,7 @@ wss.on("connection", (ws: WebSocket) => {
     }
 
     if (!peerId) {
-      sendError(ws, msg.type || "ERROR", "NOT_REGISTERED", "Send HELLO first");
+      sendError(ws, "NOT_REGISTERED", "Send HELLO first");
       return;
     }
 
@@ -163,12 +163,7 @@ wss.on("connection", (ws: WebSocket) => {
       return;
     }
 
-    sendError(
-      ws,
-      msg.type || "ERROR",
-      "UNSUPPORTED_TYPE",
-      "Unsupported message type",
-    );
+    sendError(ws, "UNSUPPORTED_TYPE", "Unsupported message type");
   });
 
   ws.on("close", () => {

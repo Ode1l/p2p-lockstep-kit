@@ -1,4 +1,5 @@
 import { createPanel } from "./panel";
+import QRCode from "qrcode";
 
 type PanelInfo = {
   peerId: string;
@@ -115,11 +116,47 @@ export const createShellUi = (options?: { defaultSignalUrl?: string }): ShellUiB
   boardWrap.className = "board-wrapper";
   container.append(panel.refs.root, boardWrap);
 
+  let lastPeerId = "";
+
   const updatePanel = (info: PanelInfo) => {
+    lastPeerId = info.peerId || "";
     panel.refs.peerId.textContent = info.peerId || "-";
     panel.refs.gameTitle.textContent = info.gameTitle || "-";
     panel.refs.status.textContent = info.connected ? "connected" : "idle";
+    void updateQr();
   };
+
+  const buildShareUrl = (peerId: string, signalUrl: string) => {
+    const url = new URL(window.location.href);
+    const shareParams = new URLSearchParams();
+    shareParams.set("id", peerId);
+    shareParams.set("url", signalUrl);
+    url.hash = shareParams.toString();
+    return url.toString();
+  };
+
+  const updateQr = async () => {
+    const peerId = lastPeerId;
+    const signalUrl = panel.refs.signalUrl.value;
+    const canvas = panel.refs.shareQr;
+    const ctx = canvas.getContext("2d");
+    if (!peerId || peerId === "-") {
+      if (ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+      return;
+    }
+    const shareUrl = buildShareUrl(peerId, signalUrl);
+    try {
+      await QRCode.toCanvas(canvas, shareUrl, { width: 160, margin: 1 });
+    } catch (err) {
+      console.log("[shell-ui] QR render failed", err);
+    }
+  };
+
+  panel.refs.signalUrl.addEventListener("input", () => {
+    void updateQr();
+  });
 
   const shareLink = async (options: { peerId: string; signalUrl: string; title?: string }) => {
     const { peerId, signalUrl, title } = options;
@@ -127,12 +164,7 @@ export const createShellUi = (options?: { defaultSignalUrl?: string }): ShellUiB
       console.log("[shell-ui] Register first to get a peer id.");
       return;
     }
-    const url = new URL(window.location.href);
-    const shareParams = new URLSearchParams();
-    shareParams.set("id", peerId);
-    shareParams.set("url", signalUrl);
-    url.hash = shareParams.toString();
-    const shareUrl = url.toString();
+    const shareUrl = buildShareUrl(peerId, signalUrl);
     try {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(shareUrl);
