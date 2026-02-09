@@ -47,6 +47,8 @@ const handleRegister = (ws: WebSocket) => {
   const id = randomUUID();
   const token = randomUUID();
   peers.set(id, { ws, token, updatedAt: Date.now() });
+  // eslint-disable-next-line no-console
+  console.log("[signaling-server] REGISTER", { id });
   send(ws, {
     type: "REGISTERED",
     to: id,
@@ -64,29 +66,41 @@ const handleResume = (ws: WebSocket, msg: any) => {
   const requestedId = data?.peerId ? String(data.peerId) : "";
   const resumeToken = data?.resumeToken ? String(data.resumeToken) : "";
   if (!requestedId || !resumeToken) {
+    // eslint-disable-next-line no-console
+    console.log("[signaling-server] RESUME missing fields");
     sendError(ws, "BAD_RESUME", "peerId/token required");
     return null;
   }
   const record = peers.get(requestedId);
   if (!record) {
+    // eslint-disable-next-line no-console
+    console.log("[signaling-server] RESUME unknown peer", requestedId);
     sendError(ws, "SESSION_NOT_FOUND", "Unknown peerId");
     return null;
   }
   if (Date.now() - record.updatedAt > RESUME_TTL_MS) {
+    // eslint-disable-next-line no-console
+    console.log("[signaling-server] RESUME expired", requestedId);
     peers.delete(requestedId);
     sendError(ws, "SESSION_EXPIRED", "Session expired");
     return null;
   }
   if (record.token !== resumeToken) {
+    // eslint-disable-next-line no-console
+    console.log("[signaling-server] RESUME bad token", requestedId);
     sendError(ws, "BAD_TOKEN", "Invalid resume token");
     return null;
   }
   if (record.ws && isOpen(record.ws)) {
+    // eslint-disable-next-line no-console
+    console.log("[signaling-server] RESUME already connected", requestedId);
     sendError(ws, "ALREADY_CONNECTED", "Peer is online");
     return null;
   }
   record.ws = ws;
   record.updatedAt = Date.now();
+  // eslint-disable-next-line no-console
+  console.log("[signaling-server] RESUME ok", requestedId);
   send(ws, {
     type: "RESUMED",
     to: requestedId,
@@ -103,12 +117,16 @@ const handleResume = (ws: WebSocket, msg: any) => {
 const handleRelay = (ws: WebSocket, peerId: string, msg: any) => {
   const to = msg.to ? String(msg.to) : "";
   if (!to) {
+    // eslint-disable-next-line no-console
+    console.log("[signaling-server] RELAY missing to", peerId);
     sendError(ws, "MISSING_TO", "to is required");
     return;
   }
 
   const target = peers.get(to)?.ws ?? null;
   if (!target || !isOpen(target)) {
+    // eslint-disable-next-line no-console
+    console.log("[signaling-server] RELAY offline", { from: peerId, to });
     sendError(ws, "PEER_OFFLINE", `Peer not connected: ${to}`);
     return;
   }
@@ -125,14 +143,20 @@ const handleRelay = (ws: WebSocket, peerId: string, msg: any) => {
     payload: msg.payload ?? null,
     ts: Date.now(),
   });
+  // eslint-disable-next-line no-console
+  console.log("[signaling-server] RELAY", { from: peerId, to });
 };
 
 wss.on("connection", (ws: WebSocket) => {
   let peerId: string | null = null;
+  // eslint-disable-next-line no-console
+  console.log("[signaling-server] WS connected");
 
   ws.on("message", (raw) => {
     const msg = parseMessage(raw);
     if (!msg) {
+      // eslint-disable-next-line no-console
+      console.log("[signaling-server] BAD_JSON");
       sendError(ws, "BAD_JSON", "Invalid JSON");
       return;
     }
@@ -154,6 +178,8 @@ wss.on("connection", (ws: WebSocket) => {
     }
 
     if (!peerId) {
+      // eslint-disable-next-line no-console
+      console.log("[signaling-server] NOT_REGISTERED", msg.type);
       sendError(ws, "NOT_REGISTERED", "Send HELLO first");
       return;
     }
@@ -163,11 +189,15 @@ wss.on("connection", (ws: WebSocket) => {
       return;
     }
 
+    // eslint-disable-next-line no-console
+    console.log("[signaling-server] UNSUPPORTED", msg.type);
     sendError(ws, "UNSUPPORTED_TYPE", "Unsupported message type");
   });
 
   ws.on("close", () => {
     if (peerId) {
+      // eslint-disable-next-line no-console
+      console.log("[signaling-server] WS closed", peerId);
       const record = peers.get(peerId);
       if (record) {
         record.ws = null;
