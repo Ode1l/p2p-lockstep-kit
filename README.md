@@ -364,3 +364,5 @@ Key ideas:
 - **ICE exchange** runs in parallel and is delivered via the signaling channel.
 
 This keeps renegotiation stable when both peers try to negotiate at the same time.
+
+消息同步流程需要更新。ui需要更新。
