@@ -2,6 +2,22 @@ import { encode, decodeSafe } from "../serialization";
 import type { SignalMessage as WireMessage } from "../protocol";
 import { Emitter } from "./emitter";
 
+const debugLog = (message: string, payload?: unknown) => {
+  if (payload !== undefined) {
+    console.log(message, payload);
+  } else {
+    console.log(message);
+  }
+  const hook = (globalThis as unknown as { __p2p_debug?: (msg: string) => void }).__p2p_debug;
+  if (typeof hook === "function") {
+    try {
+      hook(payload === undefined ? message : `${message} ${JSON.stringify(payload)}`);
+    } catch {
+      hook(message);
+    }
+  }
+};
+
 export type SignalType = "offer" | "answer" | "ice";
 
 export type SignalMessage = {
@@ -39,21 +55,41 @@ export const createSignalingClient = (): SignalingClient => {
   const emitter = new Emitter<SignalingEvents>();
 
   const connect = (url: string) =>
-    new Promise<void>((resolve) => {
+    new Promise<void>((resolve, reject) => {
       ws?.close();
+      debugLog("[signaling] ws connect", url);
       ws = new WebSocket(url);
+      const timeout = window.setTimeout(() => {
+        try {
+          ws?.close();
+        } catch {
+          // ignore
+        }
+        debugLog("[signaling] ws open timeout");
+        reject(new Error("ws open timeout"));
+      }, 5000);
       ws.addEventListener("open", () => {
         ready = true;
         registeredPayload = undefined;
+        window.clearTimeout(timeout);
+        debugLog("[signaling] ws open");
         resolve();
       });
-      ws.addEventListener("close", () => {
+      ws.addEventListener("error", (event) => {
+        window.clearTimeout(timeout);
+        debugLog("[signaling] ws error", event);
+        reject(new Error("ws error"));
+      });
+      ws.addEventListener("close", (event) => {
         ready = false;
         peerId = null;
         registeredPayload = undefined;
+        window.clearTimeout(timeout);
+        debugLog("[signaling] ws close", { code: event.code, reason: event.reason });
       });
       ws.addEventListener("message", (event) => {
         const raw = String(event.data);
+        debugLog("[signaling] ws message", raw);
         const decoded = decodeSafe<WireMessage>(raw);
         if (!decoded.ok) {
           emitter.emit("error", decoded.error);
@@ -63,6 +99,7 @@ export const createSignalingClient = (): SignalingClient => {
 
         // Adapter: map wire protocol to internal events.
         if (msg.type === "ERROR") {
+          debugLog("[signaling] error", msg);
           emitter.emit("error", msg);
           return;
         }
@@ -84,6 +121,7 @@ export const createSignalingClient = (): SignalingClient => {
               iceServers = data.iceServers ?? [];
               resumeToken = data.resumeToken ?? "";
             }
+            debugLog("[signaling] registered", { peerId, resumeToken });
             emitter.emit("registered", { peerId, iceServers, resumeToken });
           }
         }
@@ -108,6 +146,13 @@ export const createSignalingClient = (): SignalingClient => {
         return;
       }
       const msg: WireMessage = { type: "REGISTER" };
+      debugLog("[signaling] send REGISTER");
+      const timeout = window.setTimeout(() => {
+        emitter.off("registered", onRegistered);
+        emitter.off("error", onError);
+        debugLog("[signaling] register timeout");
+        reject(new Error("register timeout"));
+      }, 5000);
       const onRegistered = (payload: {
         peerId: string;
         iceServers: RTCIceServer[];
@@ -115,11 +160,15 @@ export const createSignalingClient = (): SignalingClient => {
       }) => {
         emitter.off("registered", onRegistered);
         emitter.off("error", onError);
+        window.clearTimeout(timeout);
+        debugLog("[signaling] register ok", payload.peerId);
         resolve(payload);
       };
       const onError = (error: unknown) => {
         emitter.off("registered", onRegistered);
         emitter.off("error", onError);
+        window.clearTimeout(timeout);
+        debugLog("[signaling] register error", error);
         reject(error instanceof Error ? error : new Error("signaling error"));
       };
       emitter.on("registered", onRegistered);
@@ -137,6 +186,13 @@ export const createSignalingClient = (): SignalingClient => {
         }
         const payload = { id: "resume", data: session };
         const msg: WireMessage = { type: "RESUME", payload };
+        debugLog("[signaling] send RESUME", session.peerId);
+        const timeout = window.setTimeout(() => {
+          emitter.off("registered", onRegistered);
+          emitter.off("error", onError);
+          debugLog("[signaling] resume timeout");
+          reject(new Error("resume timeout"));
+        }, 5000);
         const onRegistered = (payload: {
           peerId: string;
           iceServers: RTCIceServer[];
@@ -144,11 +200,15 @@ export const createSignalingClient = (): SignalingClient => {
         }) => {
           emitter.off("registered", onRegistered);
           emitter.off("error", onError);
+          window.clearTimeout(timeout);
+          debugLog("[signaling] resume ok", payload.peerId);
           resolve(payload);
         };
         const onError = (error: unknown) => {
           emitter.off("registered", onRegistered);
           emitter.off("error", onError);
+          window.clearTimeout(timeout);
+          debugLog("[signaling] resume error", error);
           reject(error instanceof Error ? error : new Error("resume failed"));
         };
         emitter.on("registered", onRegistered);

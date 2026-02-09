@@ -8,12 +8,15 @@ import {
   undoMove,
   type GameState,
 } from "../game/state";
-import type { GameInstance, GameMove, GamePlugin, GameStatus } from "../../../../src/shell";
+import type { GameInstance, GameMove, GamePlugin, GameStatus } from '../../../../src';
 
 export const gomokuPlugin: GamePlugin = {
-  id: "gomoku-demo",
-  title: "Gomoku",
-  create: (ctx) => {
+  id: 'gomoku-demo',
+  title: 'Gomoku',
+  create: (ctx: {
+    mount: { append: (arg0: HTMLCanvasElement) => void };
+    onLocalMove: (arg0: GameMove) => void;
+  }) => {
     const state = createInitialState();
     let connected = false;
     let myColor: 1 | 2 | null = null;
@@ -24,7 +27,9 @@ export const gomokuPlugin: GamePlugin = {
 
     const render = () => {
       const ghost =
-        connected && myColor === state.currentPlayer && state.winner === 0 ? myColor : null;
+        connected && myColor === state.currentPlayer && state.winner === 0
+          ? myColor
+          : null;
       boardView.render(state.board, hoverCell, ghost);
     };
 
@@ -43,11 +48,19 @@ export const gomokuPlugin: GamePlugin = {
       if (!canPlace(state, cell.x, cell.y)) {
         return;
       }
-      const move: GameMove = { x: cell.x, y: cell.y, player: myColor, turn: state.turn };
+      const move: GameMove = {
+        x: cell.x,
+        y: cell.y,
+        player: myColor,
+        turn: state.turn,
+      };
       ctx.onLocalMove(move);
     });
 
-    const setContext = (info: { connected: boolean; myColor: 1 | 2 | null }) => {
+    const setContext = (info: {
+      connected: boolean;
+      myColor: 1 | 2 | null;
+    }) => {
       connected = info.connected;
       myColor = info.myColor;
       render();

@@ -1,12 +1,17 @@
-import { createClient } from "../index";
-import type { Envelope } from "./protocol";
+// Net Adapter (net): provides a session-facing API over signaling + RTC client.
+// Responsibilities:
+// - Translate raw messages into envelopes for the session router.
+// - Expose register/connect/send/disconnect and connection state hooks.
+import { createClient } from "../../index";
+import type { GameEnvelope as Envelope } from "../protocol";
 
-export type NetClient = {
+export type NetAdapter = {
   register: (url: string) => Promise<{ peerId: string }>;
   connect: (targetId: string) => Promise<void>;
   disconnect: () => void;
   send: <T>(msg: Envelope<T>) => void;
   onMessage: (handler: (msg: Envelope) => void) => void;
+  onConnectionState: (handler: (state: RTCPeerConnectionState) => void) => void;
   state: () => {
     connectionState: RTCPeerConnectionState;
     iceConnectionState: RTCIceConnectionState;
@@ -14,7 +19,7 @@ export type NetClient = {
   };
 };
 
-export const createNetClient = (): NetClient => {
+export const createNetClient = (): NetAdapter => {
   const client = createClient();
   const onMessage = (handler: (msg: Envelope) => void) => {
     client.onMessage((raw) => {
@@ -39,6 +44,7 @@ export const createNetClient = (): NetClient => {
     disconnect: client.disconnect,
     send,
     onMessage,
+    onConnectionState: client.onConnectionState,
     state: client.pcState,
   };
 };

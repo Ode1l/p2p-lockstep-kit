@@ -1,5 +1,4 @@
-import { createShell } from "../../../src/shell";
-import { createShellUi } from "../../../src/shell/ui";
+import { createShell, createShellUi } from '../../../src';
 import { gomokuPlugin } from "./gomoku-plugin";
 import signalingConfig from "../../signaling-server/configuration.json";
 
@@ -31,6 +30,14 @@ const shell = createShell({
   plugin: gomokuPlugin,
   ui: {
     updatePanel: shellUi.updatePanel,
+    log: shellUi.log,
+    promptUndo: shellUi.promptUndo,
+    promptRestart: shellUi.promptRestart,
+    promptRejoinChoice: shellUi.promptRejoinChoice,
+    promptRejoinApprove: shellUi.promptRejoinApprove,
+    showStart: shellUi.showStart,
+    showWinner: shellUi.showWinner,
+    showNotice: shellUi.showNotice,
   },
 });
 
@@ -38,13 +45,31 @@ shellUi.panel.bindEvents({
   onConnect: shell.onConnect,
   onShare: async () =>
     shellUi.shareLink({
-      peerId: shellUi.panel.refs.peerId.textContent || "",
+      peerId: shellUi.getPeerId(),
       signalUrl: shellUi.panel.refs.signalUrl.value,
       title: "Gomoku",
     }),
+});
+shellUi.controls.bindEvents({
+  onReady: shell.onReady,
+  onStart: shell.onStart,
+  onUndo: shell.onUndo,
+  onRestart: shell.onRestart,
+});
+
+shellUi.panel.refs.root.addEventListener("signalUrlChanged", (event: Event) => {
+  const detail = (event as CustomEvent<{ url: string }>).detail;
+  if (!detail?.url) {
+    return;
+  }
+  shell.onRegister(detail.url);
 });
 
 shell.start({
   autoRegisterUrl: shellUi.panel.refs.signalUrl.value,
   autoConnectId: idParam ?? undefined,
+});
+
+shellUi.panel.refs.refreshButton.addEventListener("click", () => {
+  shell.onRegister(shellUi.panel.refs.signalUrl.value);
 });

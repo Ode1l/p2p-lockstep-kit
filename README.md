@@ -84,9 +84,9 @@ export type GamePlugin = {
 
 Minimal wiring example:
 ```ts
-import { createShell } from "./src/shell";
+import { createShell } from "./src/ui/shell";
 import { gomokuPlugin } from "./playground/gomoku-demo/src/gomoku-plugin";
-import { createShellUi } from "./src/shell/ui";
+import { createShellUi } from "./src/ui/shell/ui";
 
 const ui = createShellUi();
 document.querySelector("#app")?.append(ui.elements.container);
@@ -113,6 +113,17 @@ Use `templates/game-plugin.ts` as a starting point.
 Shell will send a `HELLO` message on DataChannel connect with `gameId = sid`.
 If the remote gameId does not match, the connection is closed to avoid
 cross-game pairing.
+
+---
+
+## 2.9 Recent Refactor Notes
+- Codebase split into `src/sdk` (engine/runtime) and `src/ui` (shell UI).
+- Session controller moved to `src/sdk/session`, UI shell is a thin wrapper.
+- Signaling, protocol, transport, serialization consolidated under `src/sdk/*`.
+- Register retry policy extracted with exponential backoff and configurable rules.
+- Connection state is event-driven (no polling) via `onConnectionState`.
+- Centralized logging via `Logger` with a console default.
+- Session folder grouped by responsibility: `core/` (composition root), `flow/` (register/connect), `sync/` (router + consistency), `state/` (cache + contracts), `net/` (adapter), `policy/` (retry).
 
 ## 3. Sync Model (Turn-Based First)
 
@@ -246,16 +257,29 @@ Not provided by WebSocket/WebRTC (you must build or decide):
 - **Security policy**: auth, anti-abuse, rate limits, optional signing.
 ---
 
-## 5. Repository Structure (Suggested)
+## 5. Repository Structure (Current)
 
 ```
-/ts-p2p-lockstep-kit
+/-p2p-lockstep-kit
   /src
-    /state
-    /wire (protocol + serialization)
-    /transport
-    /signaling
-    index.ts (facade: register/connect/send/disconnect)
+    /sdk
+      /protocol
+      /serialization
+      /signaling
+      /transport
+      /session
+        /core
+        /flow
+        /net
+        /policy
+        /state
+        /sync
+      index.ts
+    /ui
+      /shell
+        /ui
+      index.ts
+    index.ts (facade)
   /playground
     /playground-webrtc
     /playground-signaling
@@ -276,7 +300,7 @@ Not provided by WebSocket/WebRTC (you must build or decide):
 - Game protocol: envelope fields, message types, turn/seq rules.
 - Connection flow diagram and responsibilities by layer.
 
-### Milestone 1: /src/serialization + /src/protocol
+### Milestone 1: /src/sdk/serialization + /src/sdk/protocol
 - JSON encode/decode helpers (v0.1). ✅
 - Message type definitions and validation rules. ✅
 - Round-trip examples in playground or simple tests. ✅ (playground-signaling)
@@ -286,7 +310,7 @@ Not provided by WebSocket/WebRTC (you must build or decide):
 - Simple event emitter for signaling events. ✅
 - Basic reconnect strategy (optional for v0.1). ☐
 
-### Milestone 3: /src/transport
+### Milestone 3: /src/sdk/transport
 - WebRTC DataChannel wrapper (send/receive bytes). ✅
 - Connection state mapping (open/close/error). ✅ (basic)
 

@@ -1,4 +1,4 @@
-import type { GameContext, GameInstance, GameMove, GamePlugin, GameStatus } from "../src/shell";
+import type { GameContext, GameInstance, GameMove, GamePlugin, GameStatus } from '../src';
 
 export const examplePlugin: GamePlugin = {
   id: "example-game",

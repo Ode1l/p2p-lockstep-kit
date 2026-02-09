@@ -1,5 +1,5 @@
-import { encode, decodeSafe } from "../../../src/serialization";
-import type { SignalMessage } from "../../../src/protocol";
+import { encode, decodeSafe } from "../../../src/sdk/serialization";
+import type { SignalMessage } from "../../../src/sdk/protocol";
 import CONFIG from "../configuration.json";
 
 type Client = {

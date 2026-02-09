@@ -12,6 +12,7 @@ export type RtcPeerApi = {
   disconnect: () => void;
   send: (data: string) => void;
   getPc: () => RTCPeerConnection;
+  onConnectionState: (handler: (state: RTCPeerConnectionState) => void) => void;
 };
 
 export class RtcPeer {
@@ -24,6 +25,7 @@ export class RtcPeer {
   private state: PeerState = "passive";
   private readonly signaling: Signaling;
   private readonly onMessage?: (data: unknown) => void;
+  private onConnectionState?: (state: RTCPeerConnectionState) => void;
 
   public constructor(
     id: string,
@@ -43,6 +45,7 @@ export class RtcPeer {
 
     // PC connection state -> state machine
     this.pc.addEventListener("connectionstatechange", () => {
+      this.onConnectionState?.(this.pc.connectionState);
       if (this.pc.connectionState === "connected") {
         this.dispatch("CONNECTED");
       }
@@ -93,6 +96,9 @@ export class RtcPeer {
   };
 
   public getPc = () => this.pc;
+  public onConnectionStateChange = (handler: (state: RTCPeerConnectionState) => void) => {
+    this.onConnectionState = handler;
+  };
 
   // DC lifecycle
   private bindDataChannel = () => {
@@ -207,5 +213,6 @@ export const createRtcPeer = (
     disconnect: peer.disconnect,
     send: peer.send,
     getPc: peer.getPc,
+    onConnectionState: peer.onConnectionStateChange,
   };
 };
