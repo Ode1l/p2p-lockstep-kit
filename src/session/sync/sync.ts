@@ -11,10 +11,10 @@ import type {
   RestartPayload,
   ApprovePayload,
   RejectPayload,
-} from "../../protocol";
+} from "../../utils/protocol";
 import type { GameMove, GameStatus, ShellUi } from "../state/types";
 import { createShellRouter } from "./router";
-import type { Logger } from "../../logger";
+import type { Logger } from '../../utils';
 
 // Session Sync (sync): owns message-level sync, rejoin, and move consistency.
 // Responsibilities:

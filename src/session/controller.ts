@@ -8,7 +8,7 @@ import { createSessionState } from "./state/state";
 import { createRegisterPolicy } from "./policy";
 import { createSessionSync } from "./sync/sync";
 import { createSessionFlow } from "./flow";
-import { consoleLogger, type Logger } from "../logger";
+import { consoleLogger, type Logger } from "../utils";
 
 export type SessionOptions = {
   mount: HTMLElement;

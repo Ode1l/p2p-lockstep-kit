@@ -1,3 +1,3 @@
-import { SessionOptions, createSessionController } from '../../sdk/session';
+import { SessionOptions, createSessionController } from "../../session";
 
 export const createShell = (options: SessionOptions) => createSessionController(options);

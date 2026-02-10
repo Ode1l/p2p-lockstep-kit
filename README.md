@@ -117,9 +117,9 @@ cross-game pairing.
 ---
 
 ## 2.9 Recent Refactor Notes
-- Codebase split into `src/sdk` (engine/runtime) and `src/ui` (shell UI).
-- Session controller moved to `src/sdk/session`, UI shell is a thin wrapper.
-- Signaling, protocol, transport, serialization consolidated under `src/sdk/*`.
+- Codebase split into `src/utils` (protocol/serialization/logger), `src/network` (signaling/transport), `src/session` (flow/sync/state), and `src/ui` (shell UI).
+- Session controller lives under `src/session`, UI shell is a thin wrapper.
+- Signaling, protocol, transport, serialization consolidated under `src/utils` + `src/network`.
 - Register retry policy extracted with exponential backoff and configurable rules.
 - Connection state is event-driven (no polling) via `onConnectionState`.
 - Centralized logging via `Logger` with a console default.
@@ -189,7 +189,7 @@ Client A            Signaling Server             Client B
    |--- WS connect ------->|<------ WS connect ----|
    |--- REGISTER --------->|                       |
    |<-- REGISTERED --------|                       |
-   |                       |<-------- REGISTER ---|
+   |                       |<-------- REGISTER ----|
    |                       |-------- REGISTERED -->|
    |                       |                       |
    |--- RELAY(offer) ----->|---- RELAY(offer) ---->|
@@ -262,18 +262,22 @@ Not provided by WebSocket/WebRTC (you must build or decide):
 ```
 /-p2p-lockstep-kit
   /src
-    /sdk
+    /utils
       /protocol
       /serialization
+      logger.ts
+      index.ts
+    /network
       /signaling
       /transport
-      /session
-        /core
-        /flow
-        /net
-        /policy
-        /state
-        /sync
+      /state
+      index.ts
+    /session
+      /flow
+      /net
+      /policy
+      /state
+      /sync
       index.ts
     /ui
       /shell
@@ -300,17 +304,17 @@ Not provided by WebSocket/WebRTC (you must build or decide):
 - Game protocol: envelope fields, message types, turn/seq rules.
 - Connection flow diagram and responsibilities by layer.
 
-### Milestone 1: /src/sdk/serialization + /src/sdk/protocol
+### Milestone 1: /src/utils/serialization + /src/utils/protocol
 - JSON encode/decode helpers (v0.1). ✅
 - Message type definitions and validation rules. ✅
 - Round-trip examples in playground or simple tests. ✅ (playground-signaling)
 
-### Milestone 2: /src/rendezvous
+### Milestone 2: /src/network/signaling
 - WebSocket client for REGISTER/RELAY. ✅
 - Simple event emitter for signaling events. ✅
 - Basic reconnect strategy (optional for v0.1). ☐
 
-### Milestone 3: /src/sdk/transport
+### Milestone 3: /src/network/transport
 - WebRTC DataChannel wrapper (send/receive bytes). ✅
 - Connection state mapping (open/close/error). ✅ (basic)
 
@@ -321,7 +325,7 @@ Not provided by WebSocket/WebRTC (you must build or decide):
 
 ### Milestone 5: /src/session
 - High-level API: create/join/start/leave.
-- Glue rendezvous + transport + controller.
+- Glue network + transport + controller.
 - Room state machine (lobby/playing/reconnecting/ended).
 
 ### Milestone 6: /playground demos

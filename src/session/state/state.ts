@@ -4,8 +4,7 @@
 // - Render UI updates and feed context into the game.
 // - Persist/restore snapshot cache for rejoin.
 import type { GameMove, GamePlugin, GameStatus, ShellUi } from "./types";
-import type { Logger } from "../../logger";
-import type { RejoinPayload, SyncStatePayload } from "../../protocol";
+import type { Logger, RejoinPayload, SyncStatePayload } from "../../utils";
 
 type CacheState = {
   updatedAt: number;

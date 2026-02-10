@@ -6,4 +6,4 @@ export type {
   GameMove,
   GameStatus,
   ShellUi,
-} from "../../sdk/session/state/types";
+} from "../../session";

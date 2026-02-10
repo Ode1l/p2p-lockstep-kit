@@ -1,6 +1,6 @@
 import type { NetAdapter } from "./net";
 import type { ShellUi } from "./state/types";
-import type { Logger } from "../logger";
+import type { Logger } from '../utils';
 import type { RegisterPolicy } from "./policy";
 
 // Session Flow (flow): owns register/connect/disconnect orchestration.

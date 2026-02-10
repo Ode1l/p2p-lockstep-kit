@@ -1,5 +1,5 @@
-import { encode, decodeSafe } from "../serialization";
-import type { SignalMessage as WireMessage } from "../protocol";
+import { encode, decodeSafe } from "../../utils";
+import type { SignalMessage as WireMessage } from "../../utils";
 import { Emitter } from "./emitter";
 
 const debugLog = (message: string, payload?: unknown) => {

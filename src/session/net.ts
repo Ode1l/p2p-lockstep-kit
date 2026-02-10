@@ -2,8 +2,8 @@
 // Responsibilities:
 // - Translate raw messages into envelopes for the session router.
 // - Expose register/connect/send/disconnect and connection state hooks.
-import { createClient } from "../../index";
-import type { GameEnvelope as Envelope } from "../protocol";
+import { createClient } from "../network";
+import type { GameEnvelope as Envelope } from "../utils";
 
 export type NetAdapter = {
   register: (url: string) => Promise<{ peerId: string }>;

@@ -1,5 +1,5 @@
-export { createClient } from "./sdk";
-export type { Facade } from "./sdk";
+export { createClient } from "./network";
+export type { Facade } from "./network";
 
 export { createShell } from "./ui/shell";
 export type { GamePlugin, GameInstance, GameContext, GameMove, GameStatus, ShellUi } from "./ui/shell";

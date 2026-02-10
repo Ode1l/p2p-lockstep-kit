@@ -14,7 +14,7 @@ import type {
   RejoinPayload,
   SyncStatePayload,
   HelloPayload,
-} from "../../protocol";
+} from "../../utils";
 
 type RouterDeps = {
   sid: string;
