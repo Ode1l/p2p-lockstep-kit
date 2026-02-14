@@ -1,15 +1,19 @@
 export type { SignalMessage, SignalPayload, SignalType } from "./signaling";
 export type {
-  GameEnvelope,
-  GameMessageType,
-  HelloPayload,
+  MessageDomain,
+  MessageType,
+  WireEnvelope,
+} from "./envelope";
+export { resolveMessageDomain } from "./envelope";
+export type {
+  SessionMessageType,
   ReadyPayload,
   StartPayload,
   UndoPayload,
-  RestartPayload,
-  ApprovePayload,
-  MovePayload,
   RejectPayload,
-  RejoinPayload,
   SyncStatePayload,
+} from "./session";
+export type {
+  GameMessageType,
+  MovePayload,
 } from "./game";

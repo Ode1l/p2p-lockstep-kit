@@ -1,4 +1,4 @@
-// Session Types (state/types): game adapter contracts and UI boundary types.
+// Game Types: game adapter contracts and UI boundary types.
 // Responsibilities:
 // - Define game plugin interface and session UI boundary.
 // Defaults: current session layer assumes 2-player turn-based games.
@@ -13,6 +13,15 @@ export type GameMove = {
   turn: number;
 };
 
+export type IRuleGuardResult = {
+  ok: boolean;
+  reason?: string;
+};
+
+export type IRuleGuard = {
+  canApplyMove: (move: GameMove, status: GameStatus) => IRuleGuardResult;
+};
+
 // Turn-based status for 2-player lockstep.
 export type GameStatus = {
   turn: number;
@@ -20,13 +29,13 @@ export type GameStatus = {
   winner: WinnerId;
 };
 
-export type GameContext = {
+export type IGameContext = {
   mount: HTMLElement;
   onLocalMove: (move: GameMove) => void;
   onLog: (message: string) => void;
 };
 
-export type GameInstance = {
+export type IGameSession = {
   dispose: () => void;
   reset: () => void;
   setContext: (info: { connected: boolean; myColor: PlayerId | null }) => void;
@@ -38,15 +47,16 @@ export type GameInstance = {
   undoMove: (move: GameMove) => void;
   getSnapshot: () => unknown;
   applySnapshot: (snapshot: unknown) => void;
+  getRuleGuard?: () => IRuleGuard;
 };
 
-export type GamePlugin = {
+export type IGamePlugin = {
   id: string;
   title: string;
-  create: (ctx: GameContext) => GameInstance;
+  create: (ctx: IGameContext) => IGameSession;
 };
 
-export type GameAdapter = GamePlugin;
+export type GameAdapter = IGamePlugin;
 
 export type ShellUi = {
   updatePanel: (info: {

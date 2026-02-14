@@ -3,8 +3,16 @@
 // - Maintain session-local state (peerId, color, history, cache).
 // - Render UI updates and feed context into the game.
 // - Persist/restore snapshot cache for rejoin.
-import type { GameMove, GamePlugin, GameStatus, ShellUi } from "./types";
-import type { Logger, RejoinPayload, SyncStatePayload } from "../../utils";
+import type {
+  GameMove,
+  IGamePlugin,
+  IGameSession,
+  GameStatus,
+  IRuleGuard,
+  IRuleGuardResult,
+  ShellUi,
+} from "../../game/types";
+import type { Logger, SyncStatePayload } from "../../utils";
 
 type CacheState = {
   updatedAt: number;
@@ -39,14 +47,14 @@ const saveCache = (sid: string, cache: CacheState | null) => {
 
 export const createSessionState = (options: {
   sid: string;
-  plugin: GamePlugin;
+  plugin: IGamePlugin;
   ui: ShellUi;
   mount: HTMLElement;
   onLocalMove: (move: GameMove) => void;
   logger: Logger;
 }) => {
   const { sid, plugin, ui, mount, onLocalMove, logger } = options;
-  const game = plugin.create({
+  const game: IGameSession = plugin.create({
     mount,
     onLocalMove,
     onLog: (message) => {
@@ -54,6 +62,7 @@ export const createSessionState = (options: {
       ui.log?.(`[game] ${message}`);
     },
   });
+  const getWinner = game.isWin;
 
   let myColor: 1 | 2 | null = null;
   let connected = false;
@@ -64,6 +73,14 @@ export const createSessionState = (options: {
   let history: GameMove[] = [];
   let lastWinner: 0 | 1 | 2 = 0;
   let cache = loadCache(sid);
+  const ruleGuard: IRuleGuard =
+    game.getRuleGuard?.() ??
+    ({
+      canApplyMove: (move: GameMove, _status: GameStatus): IRuleGuardResult => {
+        const ok = game.canApplyMove(move);
+        return ok ? { ok: true } : { ok: false, reason: "invalid" };
+      },
+    } satisfies IRuleGuard);
 
   if (cache) {
     myColor = cache.myColor;
@@ -71,49 +88,57 @@ export const createSessionState = (options: {
 
   const getStatus = (): GameStatus => game.getStatus();
 
-  const setPeerId = (next: string) => {
-    peerId = next;
+  const peer = {
+    getId: () => peerId,
+    setId: (next: string) => {
+      peerId = next;
+    },
   };
 
-  const setConnected = (next: boolean) => {
-    connected = next;
+  const connectionState = {
+    set: (next: boolean) => {
+      connected = next;
+    },
   };
 
-  const setMyColor = (next: 1 | 2 | null) => {
-    myColor = next;
+  const player = {
+    getMyColor: () => myColor,
+    setMyColor: (next: 1 | 2 | null) => {
+      myColor = next;
+    },
   };
 
-  const getMyColor = () => myColor;
-  const getPeerId = () => peerId;
-  const getReady = () => ({ self: readySelf, peer: readyPeer });
-  const setReadySelf = (next: boolean) => {
-    readySelf = next;
-  };
-  const setReadyPeer = (next: boolean) => {
-    readyPeer = next;
-  };
-  const clearReady = () => {
-    readySelf = false;
-    readyPeer = false;
-  };
-
-  const setStarted = (next: boolean) => {
-    started = next;
+  const ready = {
+    get: () => ({ self: readySelf, peer: readyPeer }),
+    setSelf: (next: boolean) => {
+      readySelf = next;
+    },
+    setPeer: (next: boolean) => {
+      readyPeer = next;
+    },
+    clear: () => {
+      readySelf = false;
+      readyPeer = false;
+    },
   };
 
-  const isStarted = () => started;
-  const areBothReady = () => readySelf && readyPeer;
+  const startedState = {
+    set: (next: boolean) => {
+      started = next;
+    },
+    is: () => started,
+  };
+
   const hasCache = () => !!cache;
-
 
   const handleWinnerChange = (prevStatus?: GameStatus) => {
     const status = game.getStatus();
-    const winner = game.isWin ? game.isWin(status) : status.winner;
+    const winner = getWinner ? getWinner(status) : status.winner;
     const prevWinner = prevStatus?.winner ?? lastWinner;
     if (winner !== 0 && prevWinner !== winner) {
       lastWinner = winner;
-      clearReady();
-      setStarted(false);
+      ready.clear();
+      startedState.set(false);
       ui.showWinner?.(winner);
       const label = winner === myColor ? "You win!" : "You lose.";
       logger.info(`[game] ${label}`);
@@ -162,6 +187,22 @@ export const createSessionState = (options: {
     persistCache();
   };
 
+  const resetToLobby = () => {
+    clearCache();
+    ready.clear();
+    startedState.set(false);
+    resetMatch();
+  };
+
+  const startMatch = (nextColor: 1 | 2) => {
+    clearCache();
+    startedState.set(true);
+    ready.clear();
+    player.setMyColor(nextColor);
+    resetMatch();
+    ui.showStart?.();
+  };
+
   const applySnapshot = (payload: SyncStatePayload) => {
     game.applySnapshot(payload.state);
     history = [];
@@ -169,7 +210,10 @@ export const createSessionState = (options: {
     persistCache();
   };
 
-  const canRestore = (payload: RejoinPayload, resumeTTLms: number) =>
+  const canRestore = (
+    payload: { cacheHash: string; turn: number },
+    resumeTTLms: number,
+  ) =>
     !!(
       cache &&
       cache.hash === payload.cacheHash &&
@@ -195,21 +239,52 @@ export const createSessionState = (options: {
   const hasHistory = () => history.length > 0;
   const getHistoryLength = () => history.length;
 
+  const applyMove = (move: GameMove) => {
+    game.applyMove(move);
+    pushHistory(move);
+  };
+
+  const finalizeMove = (prevStatus: GameStatus) => {
+    handleWinnerChange(prevStatus);
+    render();
+    persistCache();
+  };
+
+  const rollbackLastMove = () => {
+    const last = popHistory();
+    if (!last) {
+      return false;
+    }
+    game.undoMove(last);
+    render();
+    persistCache();
+    return true;
+  };
+
+  const applyUndoCount = (count: 1 | 2) => {
+    let remaining = count;
+    while (remaining > 0) {
+      const last = popHistory();
+      if (!last) {
+        return false;
+      }
+      game.undoMove(last);
+      remaining -= 1;
+    }
+    render();
+    persistCache();
+    return true;
+  };
+
   return {
     game,
+    ruleGuard,
     getStatus,
-    setPeerId,
-    setConnected,
-    setMyColor,
-    getMyColor,
-    getPeerId,
-    getReady,
-    setReadySelf,
-    setReadyPeer,
-    clearReady,
-    areBothReady,
-    setStarted,
-    isStarted,
+    peer,
+    connectionState,
+    player,
+    ready,
+    startedState,
     hasCache,
     handleWinnerChange,
     render,
@@ -219,9 +294,15 @@ export const createSessionState = (options: {
     canRestore,
     clearCache,
     getCacheMeta,
-    pushHistory,
-    popHistory,
-    hasHistory,
-    getHistoryLength,
+    history: {
+      has: hasHistory,
+      length: getHistoryLength,
+    },
+    resetToLobby,
+    startMatch,
+    applyMove,
+    finalizeMove,
+    rollbackLastMove,
+    applyUndoCount,
   };
 };

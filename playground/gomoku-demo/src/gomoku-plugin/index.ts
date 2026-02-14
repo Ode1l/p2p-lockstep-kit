@@ -8,9 +8,10 @@ import {
   undoMove,
   type GameState,
 } from "../game/state";
-import type { GameInstance, GameMove, GamePlugin, GameStatus } from '../../../../src';
+import { createGomokuRuleGuard } from "./rule-guard";
+import type { IGameSession, GameMove, IGamePlugin, GameStatus } from '../../../../src';
 
-export const gomokuPlugin: GamePlugin = {
+export const gomokuPlugin: IGamePlugin = {
   id: 'gomoku-demo',
   title: 'Gomoku',
   create: (ctx: {
@@ -73,12 +74,6 @@ export const gomokuPlugin: GamePlugin = {
     });
 
     const canApplyMove = (move: GameMove) => {
-      if (state.winner !== 0) {
-        return false;
-      }
-      if (move.turn !== state.turn || move.player !== state.currentPlayer) {
-        return false;
-      }
       return canPlace(state, move.x, move.y);
     };
 
@@ -112,7 +107,7 @@ export const gomokuPlugin: GamePlugin = {
       boardView.element.remove();
     };
 
-    const instance: GameInstance = {
+    const instance: IGameSession = {
       dispose,
       reset,
       setContext,
@@ -123,6 +118,7 @@ export const gomokuPlugin: GamePlugin = {
       undoMove: undo,
       getSnapshot: () => cloneState(state),
       applySnapshot,
+      getRuleGuard: () => createGomokuRuleGuard({ canApplyMove }),
     };
 
     render();

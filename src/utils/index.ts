@@ -6,16 +6,16 @@ export type { Serialized } from "./serialization";
 
 export type { SignalMessage, SignalPayload, SignalType } from "./protocol/signaling";
 export type {
-  GameEnvelope,
+  WireEnvelope,
+  MessageDomain,
+  MessageType,
+  SessionMessageType,
   GameMessageType,
-  HelloPayload,
   ReadyPayload,
   StartPayload,
   UndoPayload,
-  RestartPayload,
-  ApprovePayload,
   RejectPayload,
-  RejoinPayload,
   SyncStatePayload,
   MovePayload,
-} from "./protocol/game";
+} from "./protocol";
+export { resolveMessageDomain } from "./protocol";

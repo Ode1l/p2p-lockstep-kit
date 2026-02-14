@@ -3,7 +3,11 @@
 // - Translate raw messages into envelopes for the session router.
 // - Expose register/connect/send/disconnect and connection state hooks.
 import { createClient } from "../network";
-import type { GameEnvelope as Envelope } from "../utils";
+import {
+  resolveMessageDomain,
+  type MessageType,
+  type WireEnvelope as Envelope,
+} from "../utils";
 
 export type NetAdapter = {
   register: (url: string) => Promise<{ peerId: string }>;
@@ -25,8 +29,13 @@ export const createNetClient = (): NetAdapter => {
     client.onMessage((raw) => {
       try {
         const msg = JSON.parse(String(raw)) as Envelope;
-        if (msg && msg.type) {
-          handler(msg);
+        if (msg && typeof msg.type === "string") {
+          const type = msg.type as MessageType;
+          handler({
+            ...msg,
+            type,
+            domain: resolveMessageDomain({ type, domain: msg.domain }),
+          });
         }
       } catch {
         // ignore parse errors
@@ -50,19 +59,8 @@ export const createNetClient = (): NetAdapter => {
 };
 
 export const createEnvelope = <T>(
-  type: Envelope<T>["type"],
-  sid: string,
-  from: string,
-  seq: number,
-  turn: number,
-  payload?: T,
-  stateHash?: string,
+  msg: Envelope<T>,
 ): Envelope<T> => ({
-  type,
-  sid,
-  from,
-  seq,
-  turn,
-  payload,
-  stateHash,
+  ...msg,
+  domain: resolveMessageDomain({ type: msg.type, domain: msg.domain }),
 });

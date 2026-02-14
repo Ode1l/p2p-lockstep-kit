@@ -1,5 +1,5 @@
 import type { NetAdapter } from "./net";
-import type { ShellUi } from "./state/types";
+import type { ShellUi } from "../game/types";
 import type { Logger } from '../utils';
 import type { RegisterPolicy } from "./policy";
 
@@ -15,7 +15,9 @@ export type SessionFlow = {
 };
 
 type FlowState = {
-  setPeerId: (id: string) => void;
+  peer: {
+    setId: (id: string) => void;
+  };
   render: () => void;
 };
 
@@ -37,7 +39,7 @@ export const createSessionFlow = (deps: {
     registerPolicy.run(url, {
       register: net.register,
       onSuccess: (id) => {
-        state.setPeerId(id);
+        state.peer.setId(id);
         logger.info("[shell] registered", id);
         ui.log?.(`[shell] registered ${id}`);
         state.render();
@@ -49,7 +51,7 @@ export const createSessionFlow = (deps: {
       onFailure: (error) => {
         logger.warn("[shell] register failed", error);
         ui.log?.("[shell] register failed, retrying");
-        state.setPeerId("");
+        state.peer.setId("");
         state.render();
       },
       onRetry: (delayMs, error) => {

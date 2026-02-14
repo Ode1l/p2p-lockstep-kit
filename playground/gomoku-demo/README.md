@@ -93,11 +93,11 @@ Use the game protocol envelope (see top-level README).
   "from": "peerId",
   "seq": 12,
   "turn": 5,
+  "stateHash": "hash-after-apply",
   "payload": {
     "x": 7,
     "y": 8,
-    "player": 1,
-    "hashAfter": "hash-after-apply"
+    "player": 1
   }
 }
 ```
@@ -122,9 +122,9 @@ Use the game protocol envelope (see top-level README).
   "from": "peerId",
   "seq": 19,
   "turn": 5,
+  "stateHash": "hash",
   "payload": {
-    "state": { "board": [], "turn": 5, "currentPlayer": 1, "winner": 0 },
-    "stateHash": "hash"
+    "state": { "board": [], "turn": 5, "currentPlayer": 1, "winner": 0 }
   }
 }
 ```
@@ -143,9 +143,9 @@ Use the game protocol envelope (see top-level README).
 1. Local player clicks a cell (x, y).
 2. Validate: connected + my turn + cell empty + game not ended.
 3. Apply move locally, update hash.
-4. Send MOVE (includes hashAfter).
+4. Send MOVE (includes stateHash).
 5. Remote validates; if invalid, sends MOVE_REJECT.
-6. Remote applies and compares hashAfter; if mismatch, sends MOVE_REJECT and rolls back.
+6. Remote applies and compares stateHash; if mismatch, sends MOVE_REJECT and rolls back.
 7. Sender receives MOVE_REJECT and rolls back its last move.
 
 Notes:
@@ -211,24 +211,24 @@ Role assignment:
 #### Reconnect Decision Flow (RESTART vs RESTORE)
 ```
 A reconnects -> registers -> connects -> DC open
-A -> B: REJOIN { cacheHash, turn }
-B compares cacheHash/turn with its cached state (strict match)
+A -> B: REJOIN (envelope.turn + envelope.stateHash)
+B compares stateHash/turn with its cached state (strict match)
 IF match:
-  B -> A: REJOIN_OK { canRestore: true }
+  B -> A: APPROVE (empty payload)
   A shows choice to user:
     - RESTART: A -> B READY, B -> A READY, A -> B START (reset state)
     - RESTORE: A -> B SYNC_REQUEST, B -> A SYNC_STATE (apply cached board)
 ELSE:
-  B -> A: REJOIN_OK { canRestore: false } (fresh pairing)
+  B -> A: REJECT { action: "rejoin", reason: "cache-mismatch" } (fresh pairing)
 ```
 
 #### Move Agreement (Lockstep + Hash)
 ```
 A clicks -> A validates locally -> A applies
-A -> B: MOVE { x, y, player, turn, hashAfter }
+A -> B: MOVE { x, y, player } + envelope.stateHash
 B validates:
-  - If invalid: B -> A MOVE_REJECT { reason, turnB, hashB }
-  - If valid:   B applies; compare hashAfter
+  - If invalid: B -> A REJECT { action: "move", reason }
+  - If valid:   B applies; compare stateHash
     - If mismatch: rollback + MOVE_REJECT
     - If match: no reply
 Sender on MOVE_REJECT:

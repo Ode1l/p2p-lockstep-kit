@@ -1,9 +1,11 @@
 export { createShell } from "./shell";
 export type {
-  GamePlugin,
-  GameInstance,
-  GameContext,
+  IGamePlugin,
+  IGameSession,
+  IGameContext,
   GameMove,
   GameStatus,
+  IRuleGuard,
+  IRuleGuardResult,
   ShellUi,
 } from "../../session";

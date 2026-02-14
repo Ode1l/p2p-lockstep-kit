@@ -3,14 +3,16 @@
 // - Expose session APIs without leaking folder structure details.
 export { createSessionController } from "./controller";
 export { createSessionFlow } from "./flow";
-export { createSessionSync } from "./sync/sync";
+export { createCommandBus } from "./commandRegistry";
 export type { SessionOptions } from "./controller";
 export type { NetAdapter } from "./net";
 export type {
-  GamePlugin,
-  GameInstance,
-  GameContext,
+  IGamePlugin,
+  IGameSession,
+  IGameContext,
   GameMove,
   GameStatus,
+  IRuleGuard,
+  IRuleGuardResult,
   ShellUi,
-} from "./state/types";
+} from "../game/types";

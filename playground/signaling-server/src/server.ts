@@ -180,7 +180,7 @@ wss.on("connection", (ws: WebSocket) => {
     if (!peerId) {
       // eslint-disable-next-line no-console
       console.log("[signaling-server] NOT_REGISTERED", msg.type);
-      sendError(ws, "NOT_REGISTERED", "Send HELLO first");
+      sendError(ws, "NOT_REGISTERED", "Register first");
       return;
     }
 
