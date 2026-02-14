@@ -201,9 +201,11 @@ export const createDesktopShellUi = (options?: { defaultSignalUrl?: string }): S
   const undoBtn = document.createElement("button");
   undoBtn.className = "desktop-shell__btn secondary";
   undoBtn.textContent = "Undo";
+  undoBtn.dataset.pending = "false";
   const restartBtn = document.createElement("button");
   restartBtn.className = "desktop-shell__btn secondary";
   restartBtn.textContent = "Restart";
+  restartBtn.dataset.pending = "false";
   controls.append(readyBtn, startBtn, undoBtn, restartBtn);
 
   const logPanel = document.createElement("div");
@@ -285,8 +287,11 @@ export const createDesktopShellUi = (options?: { defaultSignalUrl?: string }): S
     readyBtn.style.display = !info.started && !canStart ? "inline-flex" : "none";
     startBtn.disabled = !canStart;
     startBtn.style.display = canStart ? "inline-flex" : "none";
-    undoBtn.disabled = !info.connected || !info.started;
-    restartBtn.disabled = !info.connected || !info.started;
+    const undoPending = undoBtn.dataset.pending === "true";
+    undoBtn.disabled = !info.connected || !info.started || undoPending;
+    const restartPending = restartBtn.dataset.pending === "true";
+    restartBtn.style.display = info.started ? "inline-flex" : "none";
+    restartBtn.disabled = !info.connected || !info.started || restartPending;
     void updateQr();
   };
 
@@ -380,13 +385,47 @@ export const createDesktopShellUi = (options?: { defaultSignalUrl?: string }): S
     },
     controls: {
       bindEvents: (events) => {
-        readyBtn.addEventListener("click", () => {
+        readyBtn.addEventListener("click", async () => {
           const ready = readyBtn.dataset.ready === "true";
-          events.onReady(!ready);
+          readyBtn.disabled = true;
+          try {
+            await events.onReady(!ready);
+          } finally {
+            readyBtn.disabled = false;
+          }
         });
-        startBtn.addEventListener("click", () => events.onStart());
-        undoBtn.addEventListener("click", () => events.onUndo());
-        restartBtn.addEventListener("click", () => events.onRestart());
+        startBtn.addEventListener("click", async () => {
+          startBtn.disabled = true;
+          try {
+            await events.onStart();
+          } finally {
+            startBtn.disabled = false;
+          }
+        });
+        undoBtn.addEventListener("click", async () => {
+          if (undoBtn.dataset.pending === "true") {
+            return;
+          }
+          undoBtn.dataset.pending = "true";
+          undoBtn.disabled = true;
+          try {
+            await events.onUndo();
+          } finally {
+            undoBtn.dataset.pending = "false";
+          }
+        });
+        restartBtn.addEventListener("click", async () => {
+          if (restartBtn.dataset.pending === "true") {
+            return;
+          }
+          restartBtn.dataset.pending = "true";
+          restartBtn.disabled = true;
+          try {
+            await events.onRestart();
+          } finally {
+            restartBtn.dataset.pending = "false";
+          }
+        });
       },
     },
     updatePanel,

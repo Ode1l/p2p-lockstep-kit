@@ -13,6 +13,7 @@ import { createDefaultMiddlewares, createFsmGuardMiddleware } from "./commandMid
 import { createMessageSender } from "./ports/sender.ts";
 import { createNotifier } from "./ports/notifier";
 import { createPendingState } from "./state/pending";
+import type { PendingActionType } from "./state/pending";
 import { createMoveHandlers } from "../game/handlers/move";
 import { createReadyHandler } from "./handlers/ready";
 import { createStartHandler } from "./handlers/start";
@@ -21,7 +22,7 @@ import { createRestartHandler } from "./handlers/restart";
 import { createApproveHandler } from "./handlers/approve";
 import { createRejectHandler } from "./handlers/reject";
 import { createRejoinHandler } from "./rejoin/handler";
-import { createConnectionControl } from "./hooks/connection.ts";
+import { createConnectionControl } from "./hooks/connection";
 import { createRejoinChoiceControl } from "./rejoin/choice";
 import { createSessionFsm } from "./state/fsm";
 import type { SessionDeps } from "./sessionTypes";
@@ -96,7 +97,30 @@ export const createSessionController = (options: SessionOptions) => {
     fsm,
     messageSender,
     notifier,
+    pending,
   };
+  const pendingLabel: Record<PendingActionType, string> = {
+    undo: "confirm undo",
+    restart: "confirm restart",
+    rejoin: "accept rejoin",
+  };
+  pending.onChange(({ phase, action, reason }) => {
+    if (!ui.showNotice || !action) {
+      return;
+    }
+    if (phase === "waiting") {
+      ui.showNotice?.(`Waiting for opponent to ${pendingLabel[action]}`);
+      return;
+    }
+    if (phase === "resolved") {
+      ui.showNotice?.(`Opponent approved ${action}`);
+      return;
+    }
+    if (phase === "rejected") {
+      const label = reason ? `${action} rejected: ${reason}` : `${action} rejected`;
+      ui.showNotice?.(label);
+    }
+  });
   const moveHandlers = createMoveHandlers(handlerDeps);
   const handleReady = createReadyHandler(handlerDeps);
   const handleStart = createStartHandler({
@@ -108,34 +132,21 @@ export const createSessionController = (options: SessionOptions) => {
     canStart: () => !!state.peer.getId() && state.ready.get().peer,
     sendStart: (payload) => messageSender.sendStart(payload),
   });
-  const handleUndo = createUndoHandler(handlerDeps, {
-    setPendingAction: pending.setAction,
-    setPendingUndoCount: pending.setUndoCount,
-  });
+  const handleUndo = createUndoHandler(handlerDeps);
   const handleRestart = createRestartHandler(handlerDeps, {
     resetToLobby: state.resetToLobby,
-    setPendingAction: pending.setAction,
   });
   const handleApprove = createApproveHandler(handlerDeps, {
-    getPendingAction: pending.getAction,
-    setPendingAction: pending.setAction,
-    getPendingUndoCount: pending.getUndoCount,
-    setPendingUndoCount: pending.setUndoCount,
     resetToLobby: state.resetToLobby,
   });
   const handleReject = createRejectHandler(handlerDeps, {
-    getPendingAction: pending.getAction,
-    setPendingAction: pending.setAction,
-    setPendingUndoCount: pending.setUndoCount,
     resetToLobby: state.resetToLobby,
   });
   const handleRejoin = createRejoinHandler(handlerDeps, {
     resumeTTLms,
     resetToLobby: state.resetToLobby,
   });
-  const maybePromptRejoinChoice = createRejoinChoiceControl(handlerDeps, {
-    setPendingAction: pending.setAction,
-  });
+  const maybePromptRejoinChoice = createRejoinChoiceControl(handlerDeps);
   const onConnectionState = createConnectionControl(handlerDeps, {
     maybePromptRejoinChoice,
   });
@@ -202,17 +213,9 @@ export const createSessionController = (options: SessionOptions) => {
     start,
     onRegister: flow.register,
     onConnect: flow.connect,
-    onReady: (ready?: boolean) => {
-      void bus.emit("READY", { ready: ready ?? true });
-    },
-    onUndo: () => {
-      void bus.emit("UNDO");
-    },
-    onRestart: () => {
-      void bus.emit("RESTART");
-    },
-    onStart: () => {
-      void bus.emit("START");
-    },
+    onReady: (ready?: boolean) => bus.emit("READY", { ready: ready ?? true }),
+    onUndo: () => bus.emit("UNDO"),
+    onRestart: () => bus.emit("RESTART"),
+    onStart: () => bus.emit("START"),
   };
 };

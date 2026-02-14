@@ -189,6 +189,65 @@ Key ownership:
 - UI emits local commands via the bus; FSM decides legality per phase.
 - Handlers orchestrate session/game state updates and call NetAdapter to send envelopes when needed.
 - NetAdapter parses incoming envelopes, annotates domain/type, and feeds them back into the same bus so remote events take the identical path.
+- **Listeners & hooks (where they live):**
+  - CommandBus: registered in `session/controller.ts`, routes every envelope (local + remote) through FSM guard + handlers.
+  - NetAdapter: controller wires `net.onMessage` → `bus.handleMessage` and `net.onConnectionState` → `createConnectionControl` (inside `session/hooks/connection.ts`).
+  - Pending manager: controller subscribes to `pending.onChange` to show "waiting/approved/rejected" notices; handlers call `pending.begin/resolve/reject` for UNDO/RESTART/REJOIN.
+  - UI bindings: the shell UI exposes `bindEvents`, and controller connects them to `bus.emit(...)` (async handlers). All listeners/hook registration sits at the controller layer so other modules stay pure.
+
+#### Immediate vs pending commands
+- **Immediate commands**: `MOVE`, `READY`, `START`, `SYNC_REQUEST`, `SYNC_STATE`. They run entirely through the command bus + handlers + game adapter. `MOVE` may still receive a `REJECT` (hash mismatch, illegal move) and rolls back immediately, but there is no UI-level approval flow.
+- **Pending actions**: `UNDO`, `RESTART`, `REJOIN`. These require peer approval, so the session keeps a pending-action record (type + payload). Only when `APPROVE` arrives does the session apply the change (undo board, reset to lobby, send SYNC_STATE); `REJECT` clears the pending entry and shows a notice.
+- `APPROVE/REJECT` routing:
+  - `action === "move"` → handled by the move handler (rollback/hash + SYNC).
+  - Other actions → handled by the pending-action manager (`state/pending.ts` + handlers) to resolve/reject the outstanding request.
+
+Pending action lifecycle:
+```mermaid
+sequenceDiagram
+    participant UI
+    participant Session
+    participant Pending as Pending Manager
+    participant Peer
+
+    UI->>Session: bus.emit(UNDO/RESTART/REJOIN)
+    Session->>FSM: guard (local)
+    FSM-->>Session: ok
+    Session->>Pending: register action
+    Session->>Peer: send session message
+    Peer-->>Session: APPROVE / REJECT
+    alt APPROVE
+        Session->>Pending: resolve (apply undo/reset/send sync)
+    else REJECT
+        Session->>Pending: reject (clear)
+        Session->>UI: notifier.showNotice
+    end
+```
+
+Immediate MOVE path with reject handling:
+```mermaid
+sequenceDiagram
+    participant UI
+    participant Session
+    participant Game
+    participant Peer
+
+    UI->>Session: bus.emit(MOVE)
+    Session->>FSM: guard
+    alt allowed
+        Session->>Game: ruleGuard.canApplyMove
+        alt ok
+            Session->>Game: applyMove + update history/hash
+            Session->>Peer: send MOVE (turn/stateHash)
+        else invalid
+            Session->>UI: notifier.onMoveRejected
+        end
+    else blocked
+        Session-->>UI: show notice
+    end
+    Peer-->>Session: REJECT { action: "move" }
+    Session->>Game: rollback / send SYNC_REQUEST if needed
+```
 
 #### Game rules and `IGamePlugin`
 - Gameplay legality lives entirely in the **game layer** (`src/game`). Each plugin implements `IGamePlugin` and returns an `IGameSession` with `applyMove`, `undoMove`, `getRuleGuard`, `getSnapshot`, etc.

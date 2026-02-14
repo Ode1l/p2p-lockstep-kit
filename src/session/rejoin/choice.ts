@@ -1,14 +1,7 @@
 import type { SessionDeps } from "../sessionTypes";
-import type { PendingAction } from "../state/pending";
 
-export const createRejoinChoiceControl = (
-  deps: SessionDeps,
-  hooks: {
-    setPendingAction: (next: PendingAction) => void;
-  },
-) => {
-  const { state, ui, messageSender } = deps;
-  const { setPendingAction } = hooks;
+export const createRejoinChoiceControl = (deps: SessionDeps) => {
+  const { state, ui, messageSender, pending } = deps;
 
   return async () => {
     if (!state.hasCache()) {
@@ -20,7 +13,7 @@ export const createRejoinChoiceControl = (
       return;
     }
     const { cacheHash, cacheTurn } = state.getCacheMeta();
-    setPendingAction("rejoin");
+    void pending.begin("rejoin");
     messageSender.sendRejoin(cacheTurn, cacheHash);
   };
 };

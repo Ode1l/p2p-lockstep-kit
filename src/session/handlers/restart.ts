@@ -4,22 +4,22 @@ export const createRestartHandler = (
   deps: SessionDeps,
   hooks: {
     resetToLobby: () => void;
-    setPendingAction: (next: "undo" | "rejoin" | "restart" | null) => void;
   },
 ) => {
-  const { ui, messageSender } = deps;
-  const { resetToLobby, setPendingAction } = hooks;
+  const { ui, messageSender, pending } = deps;
+  const { resetToLobby } = hooks;
 
   return async (origin: "local" | "remote") => {
     if (origin === "local") {
       if (!deps.state.peer.getId()) {
         return;
       }
-      setPendingAction("restart");
+      const wait = pending.begin("restart");
       messageSender.sendRestart();
+      await wait;
       return;
     }
-    const approved = await (ui.promptRestart?.() ?? Promise.resolve(false));
+    const approved = await (ui.promptRestart?.() ?? false);
     if (approved) {
       messageSender.sendApprove();
       resetToLobby();

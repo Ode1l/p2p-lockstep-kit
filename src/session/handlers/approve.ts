@@ -3,47 +3,36 @@ import type { SessionDeps } from "../sessionTypes";
 export const createApproveHandler = (
   deps: SessionDeps,
   hooks: {
-    getPendingAction: () => "undo" | "rejoin" | "restart" | null;
-    setPendingAction: (next: "undo" | "rejoin" | "restart" | null) => void;
-    getPendingUndoCount: () => 1 | 2 | null;
-    setPendingUndoCount: (next: 1 | 2 | null) => void;
     resetToLobby: () => void;
   },
 ) => {
-  const { state, messageSender, fsm } = deps;
-  const {
-    getPendingAction,
-    setPendingAction,
-    getPendingUndoCount,
-    setPendingUndoCount,
-    resetToLobby,
-  } = hooks;
+  const { state, messageSender, fsm, pending } = deps;
+  const { resetToLobby } = hooks;
 
   return () => {
-    const pending = getPendingAction();
-    if (!pending) {
+    const current = pending.getAction();
+    if (!current) {
       return;
     }
-    if (pending === "undo") {
-      const count = getPendingUndoCount();
+    if (current === "undo") {
+      const count = pending.getUndoCount();
       if (count) {
         state.applyUndoCount(count);
       }
-      setPendingUndoCount(null);
-      setPendingAction(null);
+      pending.resolve("undo");
       return;
     }
-    if (pending === "rejoin") {
+    if (current === "rejoin") {
       messageSender.sendSyncState();
       state.startedState.set(true);
       state.ready.clear();
       fsm.onMatchStart("rejoin-approve");
-      setPendingAction(null);
+      pending.resolve("rejoin");
       return;
     }
-    if (pending === "restart") {
+    if (current === "restart") {
       resetToLobby();
-      setPendingAction(null);
+      pending.resolve("restart");
     }
   };
 };

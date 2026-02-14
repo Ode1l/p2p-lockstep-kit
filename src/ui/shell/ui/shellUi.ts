@@ -25,10 +25,10 @@ export type ShellUiBundle = {
   panel: ReturnType<typeof createPanel>;
   controls: {
     bindEvents: (events: {
-      onReady: (ready?: boolean) => void;
-      onStart: () => void;
-      onUndo: () => void;
-      onRestart: () => void;
+      onReady: (ready?: boolean) => Promise<void> | void;
+      onStart: () => Promise<void> | void;
+      onUndo: () => Promise<void> | void;
+      onRestart: () => Promise<void> | void;
     }) => void;
   };
   updatePanel: (info: PanelInfo) => void;
@@ -178,9 +178,11 @@ export const createShellUi = (options?: { defaultSignalUrl?: string }): ShellUiB
     readyBtn.disabled = !info.connected;
     startBtn.style.display = canStart ? "inline-flex" : "none";
     startBtn.disabled = !canStart;
-    undoBtn.disabled = !info.connected || !info.started;
+    const undoPending = undoBtn.dataset.pending === "true";
+    undoBtn.disabled = !info.connected || !info.started || undoPending;
+    const restartPending = restartBtn.dataset.pending === "true";
     restartBtn.style.display = info.started ? "inline-flex" : "none";
-    restartBtn.disabled = !info.connected || !info.started;
+    restartBtn.disabled = !info.connected || !info.started || restartPending;
     void updateQr();
   };
 
@@ -281,13 +283,49 @@ export const createShellUi = (options?: { defaultSignalUrl?: string }): ShellUiB
     panel,
     controls: {
       bindEvents: (events) => {
-        readyBtn.addEventListener("click", () => {
+        readyBtn.addEventListener("click", async () => {
           const ready = readyBtn.dataset.ready === "true";
-          events.onReady(!ready);
+          readyBtn.disabled = true;
+          try {
+            await events.onReady(!ready);
+          } finally {
+            readyBtn.disabled = false;
+          }
         });
-        startBtn.addEventListener("click", () => events.onStart());
-        undoBtn.addEventListener("click", () => events.onUndo());
-        restartBtn.addEventListener("click", () => events.onRestart());
+        startBtn.addEventListener("click", async () => {
+          startBtn.disabled = true;
+          try {
+            await events.onStart();
+          } finally {
+            startBtn.disabled = false;
+          }
+        });
+        undoBtn.dataset.pending = "false";
+        undoBtn.addEventListener("click", async () => {
+          if (undoBtn.dataset.pending === "true") {
+            return;
+          }
+          undoBtn.dataset.pending = "true";
+          undoBtn.disabled = true;
+          try {
+            await events.onUndo();
+          } finally {
+            undoBtn.dataset.pending = "false";
+          }
+        });
+        restartBtn.dataset.pending = "false";
+        restartBtn.addEventListener("click", async () => {
+          if (restartBtn.dataset.pending === "true") {
+            return;
+          }
+          restartBtn.dataset.pending = "true";
+          restartBtn.disabled = true;
+          try {
+            await events.onRestart();
+          } finally {
+            restartBtn.dataset.pending = "false";
+          }
+        });
       },
     },
     updatePanel,

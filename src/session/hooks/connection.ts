@@ -4,7 +4,7 @@ export const createConnectionControl = (
   deps: SessionDeps,
   hooks: { maybePromptRejoinChoice: () => Promise<void> },
 ) => {
-  const { state, notifier, fsm } = deps;
+  const { state, notifier, fsm, pending } = deps;
   const { maybePromptRejoinChoice } = hooks;
   let connected = false;
 
@@ -25,6 +25,7 @@ export const createConnectionControl = (
       state.connectionState.set(false);
       state.ready.clear();
       state.startedState.set(false);
+      pending.clear("disconnected");
       notifier.onConnection("[shell] datachannel disconnected");
     }
     state.render();

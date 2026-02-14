@@ -1,15 +1,8 @@
 import type { UndoPayload } from "../../utils";
 import type { SessionDeps } from "../../session/sessionTypes";
 
-export const createUndoHandler = (
-  deps: SessionDeps,
-  hooks: {
-    setPendingAction: (next: "undo" | "rejoin" | "restart" | null) => void;
-    setPendingUndoCount: (next: 1 | 2 | null) => void;
-  },
-) => {
-  const { state, ui, messageSender } = deps;
-  const { setPendingAction, setPendingUndoCount } = hooks;
+export const createUndoHandler = (deps: SessionDeps) => {
+  const { state, ui, messageSender, pending } = deps;
 
   return async (payload: { count?: UndoPayload["count"] }, origin: "local" | "remote") => {
     if (origin === "local") {
@@ -22,9 +15,9 @@ export const createUndoHandler = (
       if (count === 2 && state.history.length() < 2) {
         return;
       }
-      setPendingUndoCount(count);
-      setPendingAction("undo");
+      const wait = pending.begin("undo", { undoCount: count });
       messageSender.sendUndo(count);
+      await wait;
       return;
     }
 

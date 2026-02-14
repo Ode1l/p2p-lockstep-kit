@@ -1,5 +1,6 @@
 import type { SyncStatePayload } from "../utils";
 import type { GameMove, GameStatus, IGameSession, ShellUi } from "../game/types";
+import type { PendingActionType, PendingResult } from "./state/pending";
 import type { SessionFsm } from "./state/fsm";
 
 export type SessionState = {
@@ -69,5 +70,24 @@ export type SessionDeps = {
     onConnection: (message: string) => void;
     onMoveRejected: (reason?: string) => void;
     onRejectSync: (message: string) => void;
+  };
+  pending: {
+    begin: (
+      action: PendingActionType,
+      options?: { undoCount?: 1 | 2 },
+    ) => Promise<PendingResult>;
+    resolve: (action: PendingActionType) => void;
+    reject: (action: PendingActionType, reason?: string) => void;
+    clear: (reason?: string) => void;
+    getAction: () => PendingActionType | null;
+    getUndoCount: () => 1 | 2 | null;
+    getPhase: () => "idle" | "waiting" | "resolved" | "rejected";
+    onChange: (
+      handler: (event: {
+        phase: "idle" | "waiting" | "resolved" | "rejected";
+        action: PendingActionType | null;
+        reason?: string;
+      }) => void,
+    ) => () => void;
   };
 };
