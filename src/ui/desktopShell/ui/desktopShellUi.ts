@@ -278,11 +278,13 @@ export const createDesktopShellUi = (options?: { defaultSignalUrl?: string }): S
     readyLabel.innerHTML = `Ready<br/><span>${readyText}</span>`;
     cacheLabel.innerHTML = `Cache<br/><span>${info.hasCache ? "Yes" : "No"}</span>`;
 
+    const canStart = info.connected && info.readyPeer && !info.started;
     readyBtn.dataset.ready = info.readySelf ? "true" : "false";
     readyBtn.textContent = info.readySelf ? "Cancel Ready" : "Ready";
     readyBtn.disabled = !info.connected;
-    startBtn.disabled = !(info.connected && info.readyPeer && !info.started);
-    startBtn.style.display = info.connected ? "inline-flex" : "none";
+    readyBtn.style.display = !info.started && !canStart ? "inline-flex" : "none";
+    startBtn.disabled = !canStart;
+    startBtn.style.display = canStart ? "inline-flex" : "none";
     undoBtn.disabled = !info.connected || !info.started;
     restartBtn.disabled = !info.connected || !info.started;
     void updateQr();

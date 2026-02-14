@@ -42,10 +42,14 @@ export class BoardView {
     board: number[][],
     hover: { x: number; y: number } | null,
     ghostColor: 1 | 2 | null,
+    highlight?: { x: number; y: number },
   ) {
     this.ctx.clearRect(0, 0, this.size, this.size);
     this.drawGrid();
     this.drawStones(board);
+    if (highlight) {
+      this.drawHighlight(highlight);
+    }
     if (hover && ghostColor) {
       this.drawGhost(hover, ghostColor);
     }
@@ -126,6 +130,17 @@ export class BoardView {
     this.ctx.fillStyle = fill;
     this.ctx.fill();
     this.ctx.strokeStyle = stroke;
+    this.ctx.stroke();
+  }
+
+  private drawHighlight(cell: { x: number; y: number }) {
+    const cx = this.cellSize + cell.x * this.cellSize;
+    const cy = this.cellSize + cell.y * this.cellSize;
+    const radius = this.cellSize * 0.48;
+    this.ctx.beginPath();
+    this.ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    this.ctx.strokeStyle = "rgba(255, 208, 0, 0.9)";
+    this.ctx.lineWidth = 3;
     this.ctx.stroke();
   }
 }

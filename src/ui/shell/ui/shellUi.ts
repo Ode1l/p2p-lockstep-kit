@@ -169,16 +169,15 @@ export const createShellUi = (options?: { defaultSignalUrl?: string }): ShellUiB
       ? `Turn: ${info.currentTurn} (${turnLabel})`
       : "Turn: -";
 
+    const canStart = info.connected && info.readyPeer && !info.started;
     readyBtn.textContent = "Ready";
     readyBtn.dataset.ready = info.readySelf ? "true" : "false";
     readyBtn.classList.toggle("btn-primary", !info.readySelf);
     readyBtn.classList.toggle("btn-ghost", info.readySelf);
-    readyBtn.style.display =
-      !info.started && !(info.readyPeer && !info.readySelf) ? "inline-flex" : "none";
+    readyBtn.style.display = !info.started && !canStart ? "inline-flex" : "none";
     readyBtn.disabled = !info.connected;
-    startBtn.style.display =
-      info.connected && info.readyPeer && !info.readySelf && !info.started ? "inline-flex" : "none";
-    startBtn.disabled = !info.connected || info.started || !info.readyPeer || info.readySelf;
+    startBtn.style.display = canStart ? "inline-flex" : "none";
+    startBtn.disabled = !canStart;
     undoBtn.disabled = !info.connected || !info.started;
     restartBtn.style.display = info.started ? "inline-flex" : "none";
     restartBtn.disabled = !info.connected || !info.started;

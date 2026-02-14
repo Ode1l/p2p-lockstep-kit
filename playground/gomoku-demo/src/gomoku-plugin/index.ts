@@ -31,7 +31,7 @@ export const gomokuPlugin: IGamePlugin = {
         connected && myColor === state.currentPlayer && state.winner === 0
           ? myColor
           : null;
-      boardView.render(state.board, hoverCell, ghost);
+      boardView.render(state.board, hoverCell, ghost, state.lastMove);
     };
 
     boardView.onHover((cell) => {
