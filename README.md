@@ -16,24 +16,203 @@ Goal: provide a browser-first P2P session and message protocol layer for turn-ba
 - **Message protocol**: Envelope, seq, de-dup, anti-replay, stream multiplexing.
 - **Connection orchestration**: WebRTC negotiation, state monitoring, auto-reconnect/re-negotiate.
 - **Consistency support**: stateHash checks, snapshots, desync detection.
-- **Game adapter**: IGameAdapter to isolate game logic from networking.
+- **Game adapter**: IGameSession to isolate game logic from networking.
 
 ---
 
 ## 2. Layers and Responsibilities
 
 ### 2.1 Session Layer
-One-line: Orchestrates the room lifecycle and exposes the high-level game API.
-- Room lifecycle (create/join/start/leave/end).
-- Seats/roles/turn order management.
-- Reconnect + recovery (auto SYNC_REQUEST).
-- Events and high-level API (sendGameAction, requestSync).
+One-line: Orchestrates room lifecycle, rejoin/sync, and command dispatch.
+- Room lifecycle (register/connect/start/rejoin/leave).
+- Reconnect + recovery (SYNC_REQUEST / SYNC_STATE).
+- CommandBus: unify local actions and remote messages into one path.
+
+Command flow (single pipeline, two origins):
+```mermaid
+flowchart LR
+  UI[UI Action] --> API[Session API]
+  API --> LBUS[CommandBus.emit origin=local]
+  LBUS --> MID1[Middlewares]
+  MID1 --> LH[Handler local branch]
+  LH --> LG{RuleGuard + Session checks}
+  LG -->|pass| APPLY1[State apply + Render]
+  APPLY1 --> SEND[Net send Envelope]
+  LG -->|reject| NOTICE1[Local notice / ignore]
+
+  SEND --> RCV[Peer net.onMessage]
+  RCV --> RBUS[Peer CommandBus.handleMessage origin=remote]
+  RBUS --> MID2[Middlewares]
+  MID2 --> RH[Handler remote branch]
+  RH --> RG{RuleGuard + turn/hash checks}
+  RG -->|pass| APPLY2[Peer state apply + Render]
+  RG -->|reject| BACK[Send REJECT or SYNC_REQUEST]
+
+  BACK --> HOME[Local net.onMessage]
+  HOME --> HBUS[Local CommandBus.handleMessage origin=remote]
+  HBUS --> MID3[Middlewares]
+  MID3 --> HH[Handler return branch]
+  HH --> FIX[Rollback / SyncState apply / Approve apply]
+  FIX --> RENDER[Render UI]
+```
+
+Legality and control ownership:
+- Session handlers control protocol legality: envelope type/room scope, pending request flow, approve/reject/rejoin/sync.
+- Game rules own gameplay legality (`src/game/rules`); handlers only orchestrate apply/send/reject.
+- Network only transports; it does not decide game legality.
+
+Responsibility sequence (who owns what):
+```mermaid
+sequenceDiagram
+  participant UI
+  participant Session as Session(CommandBus/Handlers)
+  participant Game as Game(RuleGuard/GameSession)
+  participant Net as Network(WebRTC)
+  participant Peer as Peer Session
+
+  UI->>Session: command(move/undo/start/...)
+  Session->>Session: protocol checks(sid/type/pending)
+  Session->>Game: validate by RuleGuard
+  Game-->>Session: ok / reason
+  alt valid
+    Session->>Game: apply mutation
+    Session->>Net: send envelope
+    Net->>Peer: deliver message
+    Peer->>Peer: protocol + rule checks
+    Peer->>Peer: apply or reject/sync
+  else invalid
+    Session-->>UI: reject notice
+  end
+```
+
+Command ownership map (control, dispatch, listen):
+```mermaid
+flowchart TB
+  subgraph LocalSide[Local runtime]
+    UI[UI Layer]
+    API[Session Controller API]
+    BUS[Session CommandBus]
+    H[Session Handlers]
+    RULE[Game RuleGuard]
+    GAME[GameSession State]
+    NETOUT[Network Adapter send]
+    NETIN[Network Adapter onMessage listener]
+  end
+
+  subgraph PeerSide[Peer runtime]
+    PBUS[Peer CommandBus]
+    PH[Peer Handlers]
+    PRULE[Peer RuleGuard]
+    PGAME[Peer GameSession State]
+  end
+
+  UI -->|issue command| API
+  API -->|dispatch local command| BUS
+  BUS -->|route by type| H
+  H -->|ask gameplay legality| RULE
+  RULE -->|ok/reject| H
+  H -->|apply mutation| GAME
+  H -->|emit envelope| NETOUT
+
+  NETOUT -->|DataChannel message| NETIN
+  NETIN -->|listen + handoff| PBUS
+  PBUS -->|route by type| PH
+  PH -->|ask gameplay legality| PRULE
+  PRULE -->|ok/reject| PH
+  PH -->|apply mutation| PGAME
+```
 
 ### 2.2 Protocol / Envelope Layer
 One-line: Defines message shapes for signaling (server) and game data (peer).
 - **Two protocols**: signaling (WebSocket) and game data (DataChannel).
 - Signaling focuses on room + SDP/ICE exchange (no game fields).
-- Game protocol focuses on turn/seq/stateHash and in-game streams.
+
+#### Session/Game protocol split (parallel design)
+- **Decision**: keep session and game protocols parallel and only share the base envelope (`type/from/seq/turn/stateHash`).
+- **Pros**: keeps routing/handlers clear (`SESSION_READY` vs `GAME_MOVE`), lets FSM gate session messages without touching game logic, and allows domain-specific rejects (`SESSION_REJECT`, `GAME_REJECT`) so UI knows whether to rollback or just show a notice.
+- **Cons mitigated**: need to duplicate a few helper senders (`sendSession`, `sendGame`) and make sure shared envelope utilities stay in sync, but avoids the longer-term ambiguity that nested domain fields introduced.
+- **Reject payloads**: carry `{ domain: 'session' | 'game', action: 'ready' | 'move' | ... , reason }` so both pipelines can reuse the same wire type if needed while still signaling which layer should react.
+- Peer protocol is split by domain:
+  - `session` domain: `READY/START/UNDO/RESTART/APPROVE/REJECT/REJOIN/SYNC_*` (no `turn` required for ready/start).
+  - `game` domain: `MOVE` and other board actions (uses `turn/stateHash`, no `sid` in payload).
+
+#### Session FSM overview
+```mermaid
+stateDiagram-v2
+    [*] --> OFFLINE
+    OFFLINE --> WAITING: register + connect
+    WAITING --> READY: self.ready && peer.ready
+    READY --> WAITING: someone unready
+    READY --> GAMING: START / resume approved
+    WAITING --> GAMING: SYNC_STATE / rejoin restore
+    GAMING --> WAITING: winner / restart / undo to lobby
+    GAMING --> OFFLINE: disconnect
+    WAITING --> OFFLINE: disconnect
+```
+FSM guards Commands so the controller only processes messages that are legal in the current phase (e.g. local `START` only fires in `READY`, `MOVE` only in `GAMING`). Transitions are triggered by handler hooks: ready toggles, match start/end, and connection state changes.
+
+#### Message path (local vs remote)
+```mermaid
+sequenceDiagram
+    participant UI
+    participant Bus as CommandBus
+    participant FSM
+    participant Handler as Session/Game Handlers
+    participant Net as NetAdapter
+    participant Peer
+
+    %% Local action
+    UI->>Bus: emit(START/MOVE/...)
+    Bus->>FSM: guard(type, origin=local)
+    FSM-->>Bus: ok / reason
+    alt allowed
+        Bus->>Handler: invoke handler
+        Handler->>State: update session/game state
+        Handler->>Net: send envelope (session/game domain)
+    else blocked
+        Bus-->>UI: show notice (via notifier)
+    end
+
+    %% Remote message
+    Peer->>Net: envelope (JSON)
+    Net->>Bus: handleMessage(envelope)
+    Bus->>FSM: guard(type, origin=remote)
+    FSM-->>Bus: ok / drop
+    alt allowed
+        Bus->>Handler: handler(payload)
+        Handler->>State: apply changes (e.g. ready flag, game move)
+    else dropped
+        Bus-->>Net: optional reject (handler decides)
+    end
+```
+Key ownership:
+- UI emits local commands via the bus; FSM decides legality per phase.
+- Handlers orchestrate session/game state updates and call NetAdapter to send envelopes when needed.
+- NetAdapter parses incoming envelopes, annotates domain/type, and feeds them back into the same bus so remote events take the identical path.
+
+#### Game rules and `IGamePlugin`
+- Gameplay legality lives entirely in the **game layer** (`src/game`). Each plugin implements `IGamePlugin` and returns an `IGameSession` with `applyMove`, `undoMove`, `getRuleGuard`, `getSnapshot`, etc.
+- Session state instantiates the plugin (`createSessionState` → `plugin.create(...)`) and delegates all rule checks via `game.getRuleGuard().canApplyMove(...)`. Session only decides protocol legality (READY/START/REJOIN) and consistency (turn/hash compare).
+- The gomoku playground demonstrates the contract:
+  ```ts
+  import { createShell } from "../../src";
+  import { gomokuPlugin } from "./gomoku-plugin";
+
+  const shell = createShell({
+    mount: shellUi.elements.boardWrap,
+    plugin: gomokuPlugin,
+    ui: {
+      updatePanel: shellUi.updatePanel,
+      log: shellUi.log,
+      promptUndo: shellUi.promptUndo,
+      showStart: shellUi.showStart,
+      showWinner: shellUi.showWinner,
+    },
+  });
+  shell.start({ autoRegisterUrl: shellUi.panel.refs.signalUrl.value });
+  ```
+  Inside `gomokuPlugin` (see `playground/gomoku-demo/src/gomoku-plugin/index.ts`) the plugin exposes `getRuleGuard` to block illegal moves and supplies `applyMove/undoMove` so the session can mutate the board after messages pass validation.
+- Refer to `docs/session-overview.md` for a deeper walkthrough of the session modules and how they collaborate with the game adapter.
 
 ### 2.3 Controller Layer (Flow Control)
 One-line: Pure logic that routes messages, tracks seq, and emits events.
@@ -42,6 +221,11 @@ One-line: Pure logic that routes messages, tracks seq, and emits events.
 - Seq tracking and sliding window de-dup.
 - Stream routing and event dispatch.
 - Light consistency helpers (hash checks → desync signal).
+
+**Session Flow (register/connect orchestration)**
+- Sits beside the controller to handle imperative networking tasks: calling `net.register(url)` with retry policy, caching the returned peerId, and auto-connecting when `autoConnectId` is provided.
+- Invokes `net.connect(targetId)` to build the WebRTC peer connection + DataChannel, logs progress to the UI, and notifies the controller once the link is established.
+- Keeps these register/connect concerns out of the FSM/command bus, so protocol/state logic stays pure while flow owns side effects like retries and UI notices.
 
 ### 2.4 Transport Layer
 One-line: A thin, uniform wrapper around WebRTC DataChannel IO.
@@ -60,15 +244,69 @@ One-line: Encodes and decodes messages on the wire.
 - v0.1 uses JSON.
 - Future: msgpack/protobuf.
 
-### 2.7 IGameAdapter (Game Side)
-One-line: The game-owned boundary for actions, snapshots, and hashes.
-> Implemented by the game; p2p-kit does not know rules.
-- onLocalAction(action)
-- onRemoteMessage(msg)
+### 2.7 IGameSession (Game Side)
+One-line: The game-owned boundary for rules, actions, snapshots, and hashes.
+> Implemented by the game; session does not know rules.
+- canApplyMove(move)
+- applyMove/undoMove
 - getSnapshot()/applySnapshot(snapshot)
-- getStateHash()
+- getHash()
 
 ---
+
+## 2.8 Shell + Game Plugin (Demo Wiring)
+This repo now uses a simple Shell + GamePlugin split in the demos.
+
+Game plugin minimal contract (TypeScript):
+```ts
+export type GamePlugin = {
+  id: string;
+  title: string;
+  create: (ctx: GameContext) => GameInstance;
+};
+```
+
+Minimal wiring example:
+```ts
+import { createShell } from "./src/ui/shell";
+import { gomokuPlugin } from "./playground/gomoku-demo/src/gomoku-plugin";
+import { createShellUi } from "./src/ui/shell/ui";
+
+const ui = createShellUi();
+document.querySelector("#app")?.append(ui.elements.container);
+
+const shell = createShell({
+  mount: ui.elements.boardWrap,
+  plugin: gomokuPlugin,
+  ui: {
+    updatePanel: ui.updatePanel,
+  },
+});
+
+ui.panel.bindEvents({
+  onConnect: shell.onConnect,
+  onShare: () => {},
+});
+
+shell.start({ autoRegisterUrl: ui.panel.refs.signalUrl.value });
+```
+
+To add a new game, implement `GamePlugin` and swap the plugin import.
+Use `templates/game-plugin.ts` as a starting point.
+
+No `HELLO` message is required on DataChannel connect; session id is carried by
+the envelope `sid`.
+
+---
+
+## 2.9 Recent Refactor Notes
+- Codebase split into `src/utils` (protocol/serialization/logger), `src/network` (signaling/transport), `src/game` (move/undo/rules), `src/session` (room/rejoin/ready + CommandBus), and `src/ui` (shell UI).
+- Session controller lives under `src/session`, UI shell is a thin wrapper.
+- Signaling, protocol, transport, serialization consolidated under `src/utils` + `src/network`.
+- Register retry policy extracted with exponential backoff and configurable rules.
+- Connection state is event-driven (no polling) via `onConnectionState`.
+- Centralized logging via `Logger` with a console default.
+- Session is guard-based (no FSM). Game-specific rules live in the game plugin via RuleGuard.
 
 ## 3. Sync Model (Turn-Based First)
 
@@ -134,7 +372,7 @@ Client A            Signaling Server             Client B
    |--- WS connect ------->|<------ WS connect ----|
    |--- REGISTER --------->|                       |
    |<-- REGISTERED --------|                       |
-   |                       |<-------- REGISTER ---|
+   |                       |<-------- REGISTER ----|
    |                       |-------- REGISTERED -->|
    |                       |                       |
    |--- RELAY(offer) ----->|---- RELAY(offer) ---->|
@@ -202,16 +440,43 @@ Not provided by WebSocket/WebRTC (you must build or decide):
 - **Security policy**: auth, anti-abuse, rate limits, optional signing.
 ---
 
-## 5. Repository Structure (Suggested)
+## 5. Repository Structure (Current)
 
 ```
-/ts-p2p-lockstep-kit
+/-p2p-lockstep-kit
   /src
-    /state
-    /wire (protocol + serialization)
-    /transport
-    /signaling
-    index.ts (facade: register/connect/send/disconnect)
+    /utils
+      /protocol
+      /serialization
+      logger.ts
+      index.ts
+    /network
+      /signaling
+      /transport
+      /state
+      index.ts
+    /game
+      /handlers
+      /rules
+      types.ts
+    /session
+      /controls
+      /handlers
+      /ports
+      /rejoin
+      /state
+      commandRegistry.ts
+      commandMiddleware.ts
+      pendingState.ts
+      flow.ts
+      net.ts
+      policy.ts
+      index.ts
+    /ui
+      /shell
+        /ui
+      index.ts
+    index.ts (facade)
   /playground
     /playground-webrtc
     /playground-signaling
@@ -221,6 +486,7 @@ Not provided by WebSocket/WebRTC (you must build or decide):
   tsconfig.json
   tsup.configuration.ts
   pnpm-workspace.yaml
+  (game policies live in playgrounds or external projects, not in /src)
 ```
 
 ---
@@ -232,17 +498,17 @@ Not provided by WebSocket/WebRTC (you must build or decide):
 - Game protocol: envelope fields, message types, turn/seq rules.
 - Connection flow diagram and responsibilities by layer.
 
-### Milestone 1: /src/serialization + /src/protocol
+### Milestone 1: /src/utils/serialization + /src/utils/protocol
 - JSON encode/decode helpers (v0.1). ✅
 - Message type definitions and validation rules. ✅
 - Round-trip examples in playground or simple tests. ✅ (playground-signaling)
 
-### Milestone 2: /src/rendezvous
+### Milestone 2: /src/network/signaling
 - WebSocket client for REGISTER/RELAY. ✅
 - Simple event emitter for signaling events. ✅
 - Basic reconnect strategy (optional for v0.1). ☐
 
-### Milestone 3: /src/transport
+### Milestone 3: /src/network/transport
 - WebRTC DataChannel wrapper (send/receive bytes). ✅
 - Connection state mapping (open/close/error). ✅ (basic)
 
@@ -253,7 +519,7 @@ Not provided by WebSocket/WebRTC (you must build or decide):
 
 ### Milestone 5: /src/session
 - High-level API: create/join/start/leave.
-- Glue rendezvous + transport + controller.
+- Glue network + transport + controller.
 - Room state machine (lobby/playing/reconnecting/ended).
 
 ### Milestone 6: /playground demos
@@ -274,6 +540,49 @@ Not provided by WebSocket/WebRTC (you must build or decide):
 (end)
 
 ---
+
+## 8. Publishing to npm (Notes)
+
+Recommended approach for long-term reuse is a **monorepo with multiple packages**:
+
+- `packages/core` — RuleEngine + EventBus + snapshot utilities
+- `packages/turn-based-board-kit` — Gomoku/Chess-like games
+- `packages/card-battle-kit` — Sanguosha/Mahjong-like games
+
+Each package should have:
+- its own `package.json`
+- `src/` + `dist/`
+- `exports` + `types` configured for ESM
+
+Basic publish flow (per package):
+1) build (`dist/`)
+2) `npm login`
+3) `npm publish`
+
+Decisions needed before publishing:
+- package naming (scoped vs unscoped)
+- versioning policy (semver)
+- release workflow (manual vs scripted)
+
+## 9. Signaling Load Reduction (Notes)
+
+Goal: keep the signaling server **ephemeral** and avoid long‑lived WS when possible.
+
+### 13.1 Recommended Strategy
+1) **Initial connect**: use WS for SDP/ICE exchange.
+2) **After DataChannel open**: close WS.
+3) **Renegotiation (e.g. add audio track)**: send SDP/ICE over DataChannel instead of WS.
+4) **Reconnect**: short WS session + resumeToken (TTL 5–10 min).
+
+### 13.2 Why This Helps
+- WS connections are short‑lived.
+- Server only handles pairing/relay when needed.
+- Reconnect is still safe via resume token.
+
+### 13.3 Practical Notes
+- TURN is only needed when direct P2P fails.
+- DataChannel can carry negotiation messages once peers are connected.
+- Keep resume TTL small to limit server memory.
 
 ## ICE Candidates: When They Are Generated
 
@@ -296,3 +605,141 @@ Key ideas:
 - **ICE exchange** runs in parallel and is delivered via the signaling channel.
 
 This keeps renegotiation stable when both peers try to negotiate at the same time.
+
+消息同步流程需要更新。ui需要更新。
+
+1) 我需要多个 PC 才能多个 DC 吗？
+
+一般不需要。
+
+同一个远端 Peer（同一对连接）：用 1 个 PC + 多个 DC 就够了。
+优点：只做一次 ICE 穿透和 DTLS 握手，资源更省、建立更快、管理也更集中。
+
+不同远端 Peer（不同的人/设备）：你必须每个远端一个 PC。
+因为 PC 表示的是“你和某个远端之间的一条连接”。
+
+所以结论是：
+
+“一个 PC 多个 DC”：用于同一对等体内部做多路复用（chat / game / file / control 等）。
+
+“多个 PC”：用于连接多个不同远端。
+
+2) 一个 PC 多个 DC，怎么维护/区分？
+
+核心做法：给 DC 起名字（label）和/或指定 id，自己做一个 registry（字典映射）。
+
+常见组织方式
+
+按用途分通道
+
+control：低频控制消息（Join/Leave/Ack/Heartbeat）
+
+reliable：可靠有序（状态同步、交易、重要事件）
+
+realtime：不可靠或可丢（位置、输入、帧同步、语音状态等）
+
+file-x：文件分片/流式传输
+
+关键参数（理解用）
+
+ordered: true/false：是否按序交付
+
+maxRetransmits 或 maxPacketLifeTime：做不可靠/低延迟通道（游戏很常用）
+
+negotiated: true/false：
+
+false（默认）：一端 createDataChannel，另一端靠 pc.ondatachannel 被动收到
+
+true：双方约定好 id，各自创建同 id 的 DC（更像“固定端口”）
+
+实际工程里：大多数情况下用默认 negotiated=false + label 来区分 就很好用。
+
+3) “很多管理 DC 的方法基于 PC 状态”——PC 状态到底是什么？
+
+PC 的状态不是“每个 DC 一份”，而是 整个连接的全局状态机。DC 只是挂在这条连接上的子对象。
+
+你要关注 PC 的几类状态：
+
+(A) pc.connectionState（综合状态，最常用）
+
+典型流转：
+
+new → connecting → connected → disconnected（可能恢复）→ failed（基本要重连）→ closed
+
+它反映的是：ICE + DTLS + SCTP（数据通道承载）整体是否可用。
+
+(B) pc.iceConnectionState（ICE 连通性更细）
+
+checking / connected / completed / disconnected / failed / closed
+
+工程上经常用它做“网络抖动 vs 真失败”的判断。
+
+(C) pc.signalingState（信令协商状态）
+
+stable / have-local-offer / have-remote-offer / closed 等
+
+主要用于你做 SDP 协商、重协商（renegotiation）时避免状态冲突。
+
+4) 那 DC 自己也有状态吗？和 PC 状态怎么配合？
+
+每个 DC 也有自己的状态机：dc.readyState
+
+connecting → open → closing → closed
+
+重要关系：
+
+PC connected 不等于 某个 DC 已经 open（DC 可能还在建立中）
+
+但如果 PC failed/closed，所有 DC 最终都会走向 closed
+
+工程实践里通常这样管理：
+
+PC 的状态负责“这条连接是否还活着/要不要重连”
+
+DC 的状态负责“这个逻辑通道是否可发/是否需要重建”
+
+5) 多个 DC 时，PC 的“状态长什么样”
+
+还是一条连接的状态，不会因为你开了 N 个 DC 就变成 N 份。
+
+你可以把结构想成：
+
+1 个 PC
+
+1 套 ICE 候选对（candidate pair）选路
+
+1 条 DTLS 安全通道
+
+1 条 SCTP association（DataChannel 的承载层）
+
+**多个 DC（逻辑子通道）**共享上面这套底层传输
+
+所以当你问“PC 状态是什么样子”：
+
+PC 只告诉你“底层传输这条管道通不通”
+
+每个 DC 再告诉你“我这条逻辑管道是否 open / 是否拥塞（bufferedAmount）”
+
+6) 你可能会踩的坑（实用）
+
+开太多 DC：浏览器/实现可能有限制；一般按“用途分 2~6 条”就很够用。大量并发“每个文件/每个请求一个 DC”不划算。
+
+重协商触发：创建 DC（默认 negotiated=false）可能触发协商时机问题，尤其双方同时创建时会有“glare”。常见做法：
+
+约定只有一端负责创建 DC；或
+
+negotiated=true + 固定 id；或
+
+做好 “perfect negotiation pattern”（处理 offer collision）。
+
+拥塞与背压：用 dc.bufferedAmount + bufferedamountlow 做发送限流，否则大文件/高频消息会爆内存。
+
+建议的“最小正确架构”
+
+每个远端 peer：1 个 pc
+
+每个 pc：2~3 个 dc（例如 control/reliable/realtime）
+
+用一个 Map<label, dc> 管理
+
+用 pc.connectionState 决定是否重连；用 dc.readyState 决定是否重建某条通道

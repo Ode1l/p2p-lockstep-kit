@@ -1,5 +1,75 @@
-const app = document.querySelector<HTMLDivElement>("#app");
+import { createShell, createShellUi } from '../../../src';
+import { gomokuPlugin } from "./gomoku-plugin";
+import signalingConfig from "../../signaling-server/configuration.json";
 
-if (app) {
-  app.textContent = "gomoku-demo";
+const app = document.querySelector<HTMLDivElement>("#app");
+if (!app) {
+  throw new Error("Missing #app");
 }
+
+const defaultHost =
+  signalingConfig.signalingHost === "0.0.0.0"
+    ? window.location.hostname || "localhost"
+    : signalingConfig.signalingHost;
+const defaultSignalUrl = `ws://${defaultHost}:${signalingConfig.signalingPort}`;
+const shellUi = createShellUi({ defaultSignalUrl });
+app.append(shellUi.elements.container);
+
+const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+const urlParam = hashParams.get("url");
+const idParam = hashParams.get("id");
+if (urlParam) {
+  shellUi.panel.refs.signalUrl.value = urlParam;
+}
+if (idParam) {
+  shellUi.panel.refs.targetId.value = idParam;
+}
+
+const shell = createShell({
+  mount: shellUi.elements.boardWrap,
+  plugin: gomokuPlugin,
+  ui: {
+    updatePanel: shellUi.updatePanel,
+    log: shellUi.log,
+    promptUndo: shellUi.promptUndo,
+    promptRestart: shellUi.promptRestart,
+    promptRejoinChoice: shellUi.promptRejoinChoice,
+    promptRejoinApprove: shellUi.promptRejoinApprove,
+    showStart: shellUi.showStart,
+    showWinner: shellUi.showWinner,
+    showNotice: shellUi.showNotice,
+  },
+});
+
+shellUi.panel.bindEvents({
+  onConnect: shell.onConnect,
+  onShare: async () =>
+    shellUi.shareLink({
+      peerId: shellUi.getPeerId(),
+      signalUrl: shellUi.panel.refs.signalUrl.value,
+      title: "Gomoku",
+    }),
+});
+shellUi.controls.bindEvents({
+  onReady: shell.onReady,
+  onStart: shell.onStart,
+  onUndo: shell.onUndo,
+  onRestart: shell.onRestart,
+});
+
+shellUi.panel.refs.root.addEventListener("signalUrlChanged", (event: Event) => {
+  const detail = (event as CustomEvent<{ url: string }>).detail;
+  if (!detail?.url) {
+    return;
+  }
+  shell.onRegister(detail.url);
+});
+
+shell.start({
+  autoRegisterUrl: shellUi.panel.refs.signalUrl.value,
+  autoConnectId: idParam ?? undefined,
+});
+
+shellUi.panel.refs.refreshButton.addEventListener("click", () => {
+  shell.onRegister(shellUi.panel.refs.signalUrl.value);
+});

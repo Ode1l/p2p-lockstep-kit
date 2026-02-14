@@ -1,4 +1,5 @@
 {
+  "signalingHost": "0.0.0.0",
   "signalingPort": 8787,
   "iceServers": [
     {

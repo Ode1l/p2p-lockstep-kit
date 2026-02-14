@@ -85,17 +85,16 @@ interface GameState {
 
 Use the game protocol envelope (see top-level README).
 
-### 5.1 GAME_ACTION payloads
+### 5.1 MOVE payloads
 ```json
 {
-  "type": "GAME_ACTION",
+  "type": "MOVE",
   "sid": "gomoku-demo",
   "from": "peerId",
   "seq": 12,
   "turn": 5,
   "stateHash": "hash-after-apply",
   "payload": {
-    "action": "PLACE",
     "x": 7,
     "y": 8,
     "player": 1
@@ -123,9 +122,9 @@ Use the game protocol envelope (see top-level README).
   "from": "peerId",
   "seq": 19,
   "turn": 5,
+  "stateHash": "hash",
   "payload": {
-    "state": { "board": [], "turn": 5, "currentPlayer": 1, "winner": 0 },
-    "stateHash": "hash"
+    "state": { "board": [], "turn": 5, "currentPlayer": 1, "winner": 0 }
   }
 }
 ```
@@ -135,6 +134,7 @@ Use the game protocol envelope (see top-level README).
 - START: server-less start signal once both ready (initiator sends).
 - UNDO_REQUEST / UNDO_ACCEPT / UNDO_REJECT: coordinate one-step rollback.
 - RESULT: announce winner/draw.
+- MOVE / MOVE_REJECT: lockstep move + rejection (hash/turn used for strict check).
 
 ---
 
@@ -143,21 +143,23 @@ Use the game protocol envelope (see top-level README).
 1. Local player clicks a cell (x, y).
 2. Validate: connected + my turn + cell empty + game not ended.
 3. Apply move locally, update hash.
-4. Send GAME_ACTION to peer.
-5. Remote receives, validates turn + player + empty cell, applies.
-6. Both run win check and update winner.
+4. Send MOVE (includes stateHash).
+5. Remote validates; if invalid, sends MOVE_REJECT.
+6. Remote applies and compares stateHash; if mismatch, sends MOVE_REJECT and rolls back.
+7. Sender receives MOVE_REJECT and rolls back its last move.
 
 Notes:
 - Only the current player should send a move.
 - If a move arrives for the wrong turn or occupied cell, raise desync.
+ - If rollback is not possible (turn gap > 1), request SYNC_STATE.
 
 --- 
 
 ## 7. Desync & Recovery
 
-- If stateHash mismatch on received GAME_ACTION:
-  - Emit "desync" to UI.
-  - Send SYNC_REQUEST.
+- If hash mismatch on received MOVE:
+  - Reject the move and rollback locally.
+  - Sender rolls back; if rollback not possible, send SYNC_REQUEST.
 - On SYNC_STATE:
   - Replace local state with payload state.
   - Recompute hash and continue.
@@ -175,7 +177,7 @@ Role assignment:
 - The "caller" (the peer who initiates connect) is Black by default.
 - The other peer is White.
 - Ensure both sides agree in the initial handshake:
-  - Send a small "HELLO" game message after DC opens to confirm roles.
+  - Roles are confirmed via START payload (blackIsCaller).
 
 --- 
 
@@ -196,12 +198,47 @@ Role assignment:
 - Ready gate: both peers send READY → initiator sends START with assigned colors.
 - Color policy: game #1 random (initiator flips coin and sends), game #n alternates.
 - Undo: sender issues UNDO_REQUEST; peer replies ACCEPT/REJECT. On accept, both run `undo()` once and adjust turn/currentPlayer.
-- Rematch: after RESULT, both must READY again; reuse existing DC.
+- Rematch (no reconnect): after RESULT, both must READY again; reuse existing DC and reset game state to initial.
 - Reconnect handshake: REJOIN -> re-offer/answer -> SYNC_REQUEST/STATE to realign.
+- Reconnect decision (same match): if both detect they have the same cached board (strict hash/turn match),
+  they can choose either:
+  - RESTART: both READY → START → reset state and begin a fresh game; or
+  - RESTORE: send SYNC_REQUEST/STATE to resume the cached board/turn/winner state.
+  - Note: no identity check; only cached board hash/turn must match.
+ - Reconnect window: expose `resumeTTLms` (or similar) as a configurable input. If the last match is older than
+   this window, force RESTART.
+
+#### Reconnect Decision Flow (RESTART vs RESTORE)
+```
+A reconnects -> registers -> connects -> DC open
+A -> B: REJOIN (envelope.turn + envelope.stateHash)
+B compares stateHash/turn with its cached state (strict match)
+IF match:
+  B -> A: APPROVE (empty payload)
+  A shows choice to user:
+    - RESTART: A -> B READY, B -> A READY, A -> B START (reset state)
+    - RESTORE: A -> B SYNC_REQUEST, B -> A SYNC_STATE (apply cached board)
+ELSE:
+  B -> A: REJECT { action: "rejoin", reason: "cache-mismatch" } (fresh pairing)
+```
+
+#### Move Agreement (Lockstep + Hash)
+```
+A clicks -> A validates locally -> A applies
+A -> B: MOVE { x, y, player } + envelope.stateHash
+B validates:
+  - If invalid: B -> A REJECT { action: "move", reason }
+  - If valid:   B applies; compare stateHash
+    - If mismatch: rollback + MOVE_REJECT
+    - If match: no reply
+Sender on MOVE_REJECT:
+  - Roll back one step
+  - If rollback not possible, request SYNC_STATE
+```
 
 ### 9.4 Net Facade
 - Wraps p2p-lockstep-kit `register/connect/send/disconnect` + event handlers.
-- Outgoing messages: GAME_ACTION, SYNC_REQUEST/STATE, control messages (READY/START/UNDO/RESULT).
+- Outgoing messages: MOVE/MOVE_REJECT, SYNC_REQUEST/STATE, control messages (READY/START/UNDO/RESULT).
 
 ---
 
@@ -214,7 +251,7 @@ Role assignment:
    - listen to data channel messages
 4. Implement control messages: READY/START, RESULT, UNDO_REQUEST/ACCEPT/REJECT.
 5. Implement reconnect path: REJOIN via signaling, rebuild DC, then SYNC_REQUEST/STATE to resync turn/hash.
-6. Implement GAME_ACTION / SYNC_REQUEST / SYNC_STATE handling.
+6. Implement MOVE/MOVE_REJECT + SYNC_REQUEST/STATE handling.
 7. Add minimal logging + status UI.
 
 ---
@@ -247,5 +284,5 @@ playground/gomoku-demo/
 ## 12. Open Questions
 
 - Do we need a "ready" step before game start?
-- Should we allow rematch without re-connecting?
+- Should we allow rematch without re-connecting? (Yes: reuse existing DC; READY → START → reset state)
 - How to persist/restore game for demo?
