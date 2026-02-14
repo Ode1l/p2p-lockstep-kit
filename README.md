@@ -291,6 +291,46 @@ ui.panel.bindEvents({
 shell.start({ autoRegisterUrl: ui.panel.refs.signalUrl.value });
 ```
 
+Desktop-first layout:
+```ts
+import { createShell } from "./src/ui/shell";
+import { gomokuPlugin } from "./playground/gomoku-demo/src/gomoku-plugin";
+import { createDesktopShellUi } from "./src/ui/desktopShell";
+
+const ui = createDesktopShellUi({ defaultSignalUrl: "ws://localhost:8787" });
+document.body.append(ui.elements.container);
+
+const shell = createShell({
+  mount: ui.elements.boardWrap,
+  plugin: gomokuPlugin,
+  ui: {
+    updatePanel: ui.updatePanel,
+    log: ui.log,
+    promptUndo: ui.promptUndo,
+    promptRestart: ui.promptRestart,
+    showNotice: ui.showNotice,
+  },
+});
+
+ui.panel.bindEvents({
+  onConnect: shell.onConnect,
+  onShare: () => ui.shareLink({
+    peerId: ui.getPeerId(),
+    signalUrl: ui.panel.refs.signalUrl.value,
+    title: "Share desktop link",
+  }),
+});
+
+ui.controls.bindEvents({
+  onReady: shell.onReady,
+  onStart: shell.onStart,
+  onUndo: shell.onUndo,
+  onRestart: shell.onRestart,
+});
+
+shell.start({ autoRegisterUrl: ui.panel.refs.signalUrl.value });
+```
+
 To add a new game, implement `GamePlugin` and swap the plugin import.
 Use `templates/game-plugin.ts` as a starting point.
 
