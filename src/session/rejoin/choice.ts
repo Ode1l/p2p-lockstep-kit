@@ -1,5 +1,5 @@
 import type { SessionDeps } from "../sessionTypes";
-import type { PendingAction } from "../pendingState";
+import type { PendingAction } from "../state/pending";
 
 export const createRejoinChoiceControl = (
   deps: SessionDeps,

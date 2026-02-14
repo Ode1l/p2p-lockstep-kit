@@ -1,5 +1,6 @@
 import type { SyncStatePayload } from "../utils";
 import type { GameMove, GameStatus, IGameSession, ShellUi } from "../game/types";
+import type { SessionFsm } from "./state/fsm";
 
 export type SessionState = {
   game: IGameSession;
@@ -50,6 +51,7 @@ export type SessionState = {
 export type SessionDeps = {
   state: SessionState;
   ui: ShellUi;
+  fsm: SessionFsm;
   messageSender: {
     sendSyncRequest: () => void;
     sendSyncState: () => void;

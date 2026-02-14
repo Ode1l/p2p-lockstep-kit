@@ -4,7 +4,7 @@ export const createRejoinHandler = (
   deps: SessionDeps,
   hooks: { resumeTTLms: number; resetToLobby: () => void },
 ) => {
-  const { state, ui, messageSender } = deps;
+  const { state, ui, messageSender, fsm } = deps;
   const { resumeTTLms, resetToLobby } = hooks;
 
   return async (meta: { turn?: number; stateHash?: string }) => {
@@ -26,6 +26,7 @@ export const createRejoinHandler = (
       messageSender.sendApprove();
       state.startedState.set(true);
       state.ready.clear();
+      fsm.onMatchStart("rejoin-approved");
     } else {
       messageSender.sendReject("rejoin", "rejected");
       resetToLobby();

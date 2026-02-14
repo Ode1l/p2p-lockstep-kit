@@ -126,9 +126,93 @@ flowchart TB
 One-line: Defines message shapes for signaling (server) and game data (peer).
 - **Two protocols**: signaling (WebSocket) and game data (DataChannel).
 - Signaling focuses on room + SDP/ICE exchange (no game fields).
+
+#### Session/Game protocol split (parallel design)
+- **Decision**: keep session and game protocols parallel and only share the base envelope (`type/from/seq/turn/stateHash`).
+- **Pros**: keeps routing/handlers clear (`SESSION_READY` vs `GAME_MOVE`), lets FSM gate session messages without touching game logic, and allows domain-specific rejects (`SESSION_REJECT`, `GAME_REJECT`) so UI knows whether to rollback or just show a notice.
+- **Cons mitigated**: need to duplicate a few helper senders (`sendSession`, `sendGame`) and make sure shared envelope utilities stay in sync, but avoids the longer-term ambiguity that nested domain fields introduced.
+- **Reject payloads**: carry `{ domain: 'session' | 'game', action: 'ready' | 'move' | ... , reason }` so both pipelines can reuse the same wire type if needed while still signaling which layer should react.
 - Peer protocol is split by domain:
   - `session` domain: `READY/START/UNDO/RESTART/APPROVE/REJECT/REJOIN/SYNC_*` (no `turn` required for ready/start).
   - `game` domain: `MOVE` and other board actions (uses `turn/stateHash`, no `sid` in payload).
+
+#### Session FSM overview
+```mermaid
+stateDiagram-v2
+    [*] --> OFFLINE
+    OFFLINE --> WAITING: register + connect
+    WAITING --> READY: self.ready && peer.ready
+    READY --> WAITING: someone unready
+    READY --> GAMING: START / resume approved
+    WAITING --> GAMING: SYNC_STATE / rejoin restore
+    GAMING --> WAITING: winner / restart / undo to lobby
+    GAMING --> OFFLINE: disconnect
+    WAITING --> OFFLINE: disconnect
+```
+FSM guards Commands so the controller only processes messages that are legal in the current phase (e.g. local `START` only fires in `READY`, `MOVE` only in `GAMING`). Transitions are triggered by handler hooks: ready toggles, match start/end, and connection state changes.
+
+#### Message path (local vs remote)
+```mermaid
+sequenceDiagram
+    participant UI
+    participant Bus as CommandBus
+    participant FSM
+    participant Handler as Session/Game Handlers
+    participant Net as NetAdapter
+    participant Peer
+
+    %% Local action
+    UI->>Bus: emit(START/MOVE/...)
+    Bus->>FSM: guard(type, origin=local)
+    FSM-->>Bus: ok / reason
+    alt allowed
+        Bus->>Handler: invoke handler
+        Handler->>State: update session/game state
+        Handler->>Net: send envelope (session/game domain)
+    else blocked
+        Bus-->>UI: show notice (via notifier)
+    end
+
+    %% Remote message
+    Peer->>Net: envelope (JSON)
+    Net->>Bus: handleMessage(envelope)
+    Bus->>FSM: guard(type, origin=remote)
+    FSM-->>Bus: ok / drop
+    alt allowed
+        Bus->>Handler: handler(payload)
+        Handler->>State: apply changes (e.g. ready flag, game move)
+    else dropped
+        Bus-->>Net: optional reject (handler decides)
+    end
+```
+Key ownership:
+- UI emits local commands via the bus; FSM decides legality per phase.
+- Handlers orchestrate session/game state updates and call NetAdapter to send envelopes when needed.
+- NetAdapter parses incoming envelopes, annotates domain/type, and feeds them back into the same bus so remote events take the identical path.
+
+#### Game rules and `IGamePlugin`
+- Gameplay legality lives entirely in the **game layer** (`src/game`). Each plugin implements `IGamePlugin` and returns an `IGameSession` with `applyMove`, `undoMove`, `getRuleGuard`, `getSnapshot`, etc.
+- Session state instantiates the plugin (`createSessionState` → `plugin.create(...)`) and delegates all rule checks via `game.getRuleGuard().canApplyMove(...)`. Session only decides protocol legality (READY/START/REJOIN) and consistency (turn/hash compare).
+- The gomoku playground demonstrates the contract:
+  ```ts
+  import { createShell } from "../../src";
+  import { gomokuPlugin } from "./gomoku-plugin";
+
+  const shell = createShell({
+    mount: shellUi.elements.boardWrap,
+    plugin: gomokuPlugin,
+    ui: {
+      updatePanel: shellUi.updatePanel,
+      log: shellUi.log,
+      promptUndo: shellUi.promptUndo,
+      showStart: shellUi.showStart,
+      showWinner: shellUi.showWinner,
+    },
+  });
+  shell.start({ autoRegisterUrl: shellUi.panel.refs.signalUrl.value });
+  ```
+  Inside `gomokuPlugin` (see `playground/gomoku-demo/src/gomoku-plugin/index.ts`) the plugin exposes `getRuleGuard` to block illegal moves and supplies `applyMove/undoMove` so the session can mutate the board after messages pass validation.
+- Refer to `docs/session-overview.md` for a deeper walkthrough of the session modules and how they collaborate with the game adapter.
 
 ### 2.3 Controller Layer (Flow Control)
 One-line: Pure logic that routes messages, tracks seq, and emits events.
@@ -137,6 +221,11 @@ One-line: Pure logic that routes messages, tracks seq, and emits events.
 - Seq tracking and sliding window de-dup.
 - Stream routing and event dispatch.
 - Light consistency helpers (hash checks → desync signal).
+
+**Session Flow (register/connect orchestration)**
+- Sits beside the controller to handle imperative networking tasks: calling `net.register(url)` with retry policy, caching the returned peerId, and auto-connecting when `autoConnectId` is provided.
+- Invokes `net.connect(targetId)` to build the WebRTC peer connection + DataChannel, logs progress to the UI, and notifies the controller once the link is established.
+- Keeps these register/connect concerns out of the FSM/command bus, so protocol/state logic stays pure while flow owns side effects like retries and UI notices.
 
 ### 2.4 Transport Layer
 One-line: A thin, uniform wrapper around WebRTC DataChannel IO.

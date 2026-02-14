@@ -14,6 +14,12 @@ import type {
 } from "../../game/types";
 import type { Logger, SyncStatePayload } from "../../utils";
 
+type SessionStateHooks = {
+  onReadyChange?: (ready: { self: boolean; peer: boolean }) => void;
+  onMatchStart?: () => void;
+  onMatchEnd?: () => void;
+};
+
 type CacheState = {
   updatedAt: number;
   snapshot: unknown;
@@ -45,14 +51,17 @@ const saveCache = (sid: string, cache: CacheState | null) => {
   localStorage.setItem(cacheKey(sid), JSON.stringify(cache));
 };
 
-export const createSessionState = (options: {
-  sid: string;
-  plugin: IGamePlugin;
-  ui: ShellUi;
-  mount: HTMLElement;
-  onLocalMove: (move: GameMove) => void;
-  logger: Logger;
-}) => {
+export const createSessionState = (
+  options: {
+    sid: string;
+    plugin: IGamePlugin;
+    ui: ShellUi;
+    mount: HTMLElement;
+    onLocalMove: (move: GameMove) => void;
+    logger: Logger;
+  },
+  hooks: SessionStateHooks = {},
+) => {
   const { sid, plugin, ui, mount, onLocalMove, logger } = options;
   const game: IGameSession = plugin.create({
     mount,
@@ -108,17 +117,24 @@ export const createSessionState = (options: {
     },
   };
 
+  const notifyReadyChange = () => {
+    hooks.onReadyChange?.({ self: readySelf, peer: readyPeer });
+  };
+
   const ready = {
     get: () => ({ self: readySelf, peer: readyPeer }),
     setSelf: (next: boolean) => {
       readySelf = next;
+      notifyReadyChange();
     },
     setPeer: (next: boolean) => {
       readyPeer = next;
+      notifyReadyChange();
     },
     clear: () => {
       readySelf = false;
       readyPeer = false;
+      notifyReadyChange();
     },
   };
 
@@ -143,6 +159,7 @@ export const createSessionState = (options: {
       const label = winner === myColor ? "You win!" : "You lose.";
       logger.info(`[game] ${label}`);
       ui.log?.(`[game] ${label}`);
+      hooks.onMatchEnd?.();
     }
   };
 
@@ -192,6 +209,7 @@ export const createSessionState = (options: {
     ready.clear();
     startedState.set(false);
     resetMatch();
+    hooks.onMatchEnd?.();
   };
 
   const startMatch = (nextColor: 1 | 2) => {
@@ -201,6 +219,7 @@ export const createSessionState = (options: {
     player.setMyColor(nextColor);
     resetMatch();
     ui.showStart?.();
+    hooks.onMatchStart?.();
   };
 
   const applySnapshot = (payload: SyncStatePayload) => {
@@ -208,6 +227,7 @@ export const createSessionState = (options: {
     history = [];
     render();
     persistCache();
+    hooks.onMatchStart?.();
   };
 
   const canRestore = (
@@ -275,6 +295,8 @@ export const createSessionState = (options: {
     persistCache();
     return true;
   };
+
+  notifyReadyChange();
 
   return {
     game,

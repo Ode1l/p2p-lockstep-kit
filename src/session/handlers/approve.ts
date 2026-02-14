@@ -10,7 +10,7 @@ export const createApproveHandler = (
     resetToLobby: () => void;
   },
 ) => {
-  const { state, messageSender } = deps;
+  const { state, messageSender, fsm } = deps;
   const {
     getPendingAction,
     setPendingAction,
@@ -37,6 +37,7 @@ export const createApproveHandler = (
       messageSender.sendSyncState();
       state.startedState.set(true);
       state.ready.clear();
+      fsm.onMatchStart("rejoin-approve");
       setPendingAction(null);
       return;
     }

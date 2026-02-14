@@ -4,7 +4,7 @@ export const createConnectionControl = (
   deps: SessionDeps,
   hooks: { maybePromptRejoinChoice: () => Promise<void> },
 ) => {
-  const { state, notifier } = deps;
+  const { state, notifier, fsm } = deps;
   const { maybePromptRejoinChoice } = hooks;
   let connected = false;
 
@@ -12,6 +12,7 @@ export const createConnectionControl = (
     const nowConnected = connState === "connected";
     if (nowConnected && !connected) {
       connected = true;
+      fsm.onConnected();
       state.connectionState.set(true);
       state.ready.clear();
       state.startedState.set(false);
@@ -20,6 +21,7 @@ export const createConnectionControl = (
     }
     if (!nowConnected && connected) {
       connected = false;
+      fsm.onDisconnected();
       state.connectionState.set(false);
       state.ready.clear();
       state.startedState.set(false);

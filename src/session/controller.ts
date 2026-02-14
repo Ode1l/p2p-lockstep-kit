@@ -9,10 +9,10 @@ import { createRegisterPolicy } from "./policy";
 import { createSessionFlow } from "./flow";
 import { consoleLogger, type Logger } from "../utils";
 import { createCommandBus } from "./commandRegistry";
-import { createDefaultMiddlewares } from "./commandMiddleware";
-import { createMessageSender } from "./ports/messageSender";
+import { createDefaultMiddlewares, createFsmGuardMiddleware } from "./commandMiddleware";
+import { createMessageSender } from "./ports/sender.ts";
 import { createNotifier } from "./ports/notifier";
-import { createPendingState } from "./pendingState";
+import { createPendingState } from "./state/pending";
 import { createMoveHandlers } from "../game/handlers/move";
 import { createReadyHandler } from "./handlers/ready";
 import { createStartHandler } from "./handlers/start";
@@ -21,8 +21,9 @@ import { createRestartHandler } from "./handlers/restart";
 import { createApproveHandler } from "./handlers/approve";
 import { createRejectHandler } from "./handlers/reject";
 import { createRejoinHandler } from "./rejoin/handler";
-import { createConnectionControl } from "./controls/connection";
+import { createConnectionControl } from "./hooks/connection.ts";
 import { createRejoinChoiceControl } from "./rejoin/choice";
+import { createSessionFsm } from "./state/fsm";
 import type { SessionDeps } from "./sessionTypes";
 
 export type SessionOptions = {
@@ -53,16 +54,25 @@ export const createSessionController = (options: SessionOptions) => {
   let lastStartSenderColor: 1 | 2 | null = null;
   let handleLocalMove: ((move: GameMove) => void) | null = null;
 
-  const state = createSessionState({
-    sid,
-    plugin,
-    ui,
-    mount,
-    logger,
-    onLocalMove: (move) => {
-      handleLocalMove?.(move);
+  const fsm = createSessionFsm({ logger });
+
+  const state = createSessionState(
+    {
+      sid,
+      plugin,
+      ui,
+      mount,
+      logger,
+      onLocalMove: (move) => {
+        handleLocalMove?.(move);
+      },
     },
-  });
+    {
+      onReadyChange: (ready) => fsm.onReadyStateChange(ready),
+      onMatchStart: () => fsm.onMatchStart(),
+      onMatchEnd: () => fsm.onMatchEnd(),
+    },
+  );
 
   const registerPolicy = createRegisterPolicy(options.retry);
 
@@ -83,6 +93,7 @@ export const createSessionController = (options: SessionOptions) => {
   const handlerDeps: SessionDeps = {
     state,
     ui,
+    fsm,
     messageSender,
     notifier,
   };
@@ -128,6 +139,15 @@ export const createSessionController = (options: SessionOptions) => {
   const onConnectionState = createConnectionControl(handlerDeps, {
     maybePromptRejoinChoice,
   });
+  const middlewares = [
+    createFsmGuardMiddleware({
+      fsm,
+      logger,
+      onLocalBlock: notifier.onRejectNotice,
+    }),
+    ...createDefaultMiddlewares(logger),
+  ];
+
   const bus = createCommandBus({
     sid,
     handlers: {
@@ -156,7 +176,7 @@ export const createSessionController = (options: SessionOptions) => {
       SYNC_STATE: (payload) => state.applySnapshot(payload as { state: unknown }),
     },
     afterHandle: state.render,
-    middlewares: createDefaultMiddlewares(logger),
+    middlewares,
   });
   handleLocalMove = (move) => {
     void bus.emit("MOVE", { x: move.x, y: move.y, player: move.player });
