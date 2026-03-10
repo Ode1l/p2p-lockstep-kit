@@ -1,6 +1,6 @@
 import { createShell, createShellUi } from '../../../src';
 import { gomokuPlugin } from "./gomoku-plugin";
-import signalingConfig from "../../signaling-server/configuration.json";
+import signalingConfig from "../../../../signaling-server/configuration.json";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) {

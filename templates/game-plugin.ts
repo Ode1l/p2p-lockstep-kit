@@ -1,9 +1,15 @@
-import type { GameContext, GameInstance, GameMove, GamePlugin, GameStatus } from '../src';
+import type {
+  IGameContext,
+  IGameSession,
+  GameMove,
+  IGamePlugin,
+  GameStatus,
+} from '../src';
 
-export const examplePlugin: GamePlugin = {
+export const examplePlugin: IGamePlugin = {
   id: "example-game",
   title: "Example Game",
-  create: (ctx: GameContext): GameInstance => {
+  create: (ctx: IGameContext): IGameSession => {
     let connected = false;
     let myColor: 1 | 2 | null = null;
     const state = {

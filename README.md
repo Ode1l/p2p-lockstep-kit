@@ -195,6 +195,12 @@ Key ownership:
   - Pending manager: controller subscribes to `pending.onChange` to show "waiting/approved/rejected" notices; handlers call `pending.begin/resolve/reject` for UNDO/RESTART/REJOIN.
   - UI bindings: the shell UI exposes `bindEvents`, and controller connects them to `bus.emit(...)` (async handlers). All listeners/hook registration sits at the controller layer so other modules stay pure.
 
+End-to-end flow:
+- **Local action**: Player clicks the UI → `controls.bindEvents` calls into session API → `commandBus.emit` pushes the command through FSM guard → handler updates game/session state and, if applicable, sends a game/session envelope via `messageSender` → NetAdapter forwards it on the existing DataChannel.
+- **Remote action**: NetAdapter receives JSON → controller hands it to the command bus → FSM guard + handlers run the same logic, updating state and triggering UI (e.g., prompts, notices). `REJECT {action:"move"}` always routes to the move handler for rollback; other rejects go to the pending manager.
+- **Pending requests**: `undo/restart/rejoin` use `pending.begin()` (Promise) so UI buttons stay disabled until `APPROVE/REJECT` arrives. The pending manager emits phase changes (`idle/waiting/resolved/rejected`) so controller can show "waiting" notices. Disconnects call `pending.clear()` so no stale Promises remain.
+- **Move ordering**: RuleGuard + turn/hash checks prevent “two moves in a row” — any MOVE whose `turn` or legality is invalid is rejected immediately and the sender rolls back or requests SYNC.
+
 #### Immediate vs pending commands
 - **Immediate commands**: `MOVE`, `READY`, `START`, `SYNC_REQUEST`, `SYNC_STATE`. They run entirely through the command bus + handlers + game adapter. `MOVE` may still receive a `REJECT` (hash mismatch, illegal move) and rolls back immediately, but there is no UI-level approval flow.
 - **Pending actions**: `UNDO`, `RESTART`, `REJOIN`. These require peer approval, so the session keeps a pending-action record (type + payload). Only when `APPROVE` arrives does the session apply the change (undo board, reset to lobby, send SYNC_STATE); `REJECT` clears the pending entry and shows a notice.
@@ -405,7 +411,7 @@ the envelope `sid`.
 - Register retry policy extracted with exponential backoff and configurable rules.
 - Connection state is event-driven (no polling) via `onConnectionState`.
 - Centralized logging via `Logger` with a console default.
-- Session is guard-based (no FSM). Game-specific rules live in the game plugin via RuleGuard.
+- Session now uses a dedicated FSM + pending-action manager; gameplay legality still lives in the game plugin via RuleGuard.
 
 ## 3. Sync Model (Turn-Based First)
 
@@ -704,141 +710,3 @@ Key ideas:
 - **ICE exchange** runs in parallel and is delivered via the signaling channel.
 
 This keeps renegotiation stable when both peers try to negotiate at the same time.
-
-消息同步流程需要更新。ui需要更新。
-
-1) 我需要多个 PC 才能多个 DC 吗？
-
-一般不需要。
-
-同一个远端 Peer（同一对连接）：用 1 个 PC + 多个 DC 就够了。
-优点：只做一次 ICE 穿透和 DTLS 握手，资源更省、建立更快、管理也更集中。
-
-不同远端 Peer（不同的人/设备）：你必须每个远端一个 PC。
-因为 PC 表示的是“你和某个远端之间的一条连接”。
-
-所以结论是：
-
-“一个 PC 多个 DC”：用于同一对等体内部做多路复用（chat / game / file / control 等）。
-
-“多个 PC”：用于连接多个不同远端。
-
-2) 一个 PC 多个 DC，怎么维护/区分？
-
-核心做法：给 DC 起名字（label）和/或指定 id，自己做一个 registry（字典映射）。
-
-常见组织方式
-
-按用途分通道
-
-control：低频控制消息（Join/Leave/Ack/Heartbeat）
-
-reliable：可靠有序（状态同步、交易、重要事件）
-
-realtime：不可靠或可丢（位置、输入、帧同步、语音状态等）
-
-file-x：文件分片/流式传输
-
-关键参数（理解用）
-
-ordered: true/false：是否按序交付
-
-maxRetransmits 或 maxPacketLifeTime：做不可靠/低延迟通道（游戏很常用）
-
-negotiated: true/false：
-
-false（默认）：一端 createDataChannel，另一端靠 pc.ondatachannel 被动收到
-
-true：双方约定好 id，各自创建同 id 的 DC（更像“固定端口”）
-
-实际工程里：大多数情况下用默认 negotiated=false + label 来区分 就很好用。
-
-3) “很多管理 DC 的方法基于 PC 状态”——PC 状态到底是什么？
-
-PC 的状态不是“每个 DC 一份”，而是 整个连接的全局状态机。DC 只是挂在这条连接上的子对象。
-
-你要关注 PC 的几类状态：
-
-(A) pc.connectionState（综合状态，最常用）
-
-典型流转：
-
-new → connecting → connected → disconnected（可能恢复）→ failed（基本要重连）→ closed
-
-它反映的是：ICE + DTLS + SCTP（数据通道承载）整体是否可用。
-
-(B) pc.iceConnectionState（ICE 连通性更细）
-
-checking / connected / completed / disconnected / failed / closed
-
-工程上经常用它做“网络抖动 vs 真失败”的判断。
-
-(C) pc.signalingState（信令协商状态）
-
-stable / have-local-offer / have-remote-offer / closed 等
-
-主要用于你做 SDP 协商、重协商（renegotiation）时避免状态冲突。
-
-4) 那 DC 自己也有状态吗？和 PC 状态怎么配合？
-
-每个 DC 也有自己的状态机：dc.readyState
-
-connecting → open → closing → closed
-
-重要关系：
-
-PC connected 不等于 某个 DC 已经 open（DC 可能还在建立中）
-
-但如果 PC failed/closed，所有 DC 最终都会走向 closed
-
-工程实践里通常这样管理：
-
-PC 的状态负责“这条连接是否还活着/要不要重连”
-
-DC 的状态负责“这个逻辑通道是否可发/是否需要重建”
-
-5) 多个 DC 时，PC 的“状态长什么样”
-
-还是一条连接的状态，不会因为你开了 N 个 DC 就变成 N 份。
-
-你可以把结构想成：
-
-1 个 PC
-
-1 套 ICE 候选对（candidate pair）选路
-
-1 条 DTLS 安全通道
-
-1 条 SCTP association（DataChannel 的承载层）
-
-**多个 DC（逻辑子通道）**共享上面这套底层传输
-
-所以当你问“PC 状态是什么样子”：
-
-PC 只告诉你“底层传输这条管道通不通”
-
-每个 DC 再告诉你“我这条逻辑管道是否 open / 是否拥塞（bufferedAmount）”
-
-6) 你可能会踩的坑（实用）
-
-开太多 DC：浏览器/实现可能有限制；一般按“用途分 2~6 条”就很够用。大量并发“每个文件/每个请求一个 DC”不划算。
-
-重协商触发：创建 DC（默认 negotiated=false）可能触发协商时机问题，尤其双方同时创建时会有“glare”。常见做法：
-
-约定只有一端负责创建 DC；或
-
-negotiated=true + 固定 id；或
-
-做好 “perfect negotiation pattern”（处理 offer collision）。
-
-拥塞与背压：用 dc.bufferedAmount + bufferedamountlow 做发送限流，否则大文件/高频消息会爆内存。
-
-建议的“最小正确架构”
-
-每个远端 peer：1 个 pc
-
-每个 pc：2~3 个 dc（例如 control/reliable/realtime）
-
-用一个 Map<label, dc> 管理
-
-用 pc.connectionState 决定是否重连；用 dc.readyState 决定是否重建某条通道
