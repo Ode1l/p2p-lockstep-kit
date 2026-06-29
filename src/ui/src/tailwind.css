@@ -1,0 +1,253 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    color-scheme: light;
+    --lock-bg: #f4f4f1;
+    --lock-bg-deep: #ebebe7;
+    --lock-surface: rgba(255, 255, 252, 0.86);
+    --lock-surface-strong: rgba(255, 255, 252, 0.96);
+    --lock-border: rgba(28, 28, 26, 0.1);
+    --lock-border-strong: rgba(28, 28, 26, 0.18);
+    --lock-paper: #1f1f1d;
+    --lock-muted: #666761;
+    --lock-dim: #9a9b94;
+    --lock-bronze: #4f504b;
+    --lock-bronze-bright: #32332f;
+    --lock-teal: #1c8f70;
+    --lock-rose: #b64b42;
+    --lock-ink-shadow: rgba(15, 15, 12, 0.09);
+    --lock-app-background: radial-gradient(circle at 18% 8%, rgba(255, 255, 255, 0.85), transparent 28%), linear-gradient(145deg, var(--lock-bg), var(--lock-bg-deep));
+    --lock-grid-line: rgba(28, 28, 26, 0.035);
+    --lock-panel-background: linear-gradient(145deg, rgba(255, 255, 255, 0.72), transparent 44%), var(--lock-surface);
+    --lock-panel-inset: rgba(255, 255, 255, 0.7);
+    --lock-card: rgba(255, 255, 252, 0.58);
+    --lock-card-strong: rgba(255, 255, 252, 0.96);
+    --lock-card-hover: rgba(255, 255, 252, 0.9);
+    --lock-control: rgba(255, 255, 252, 0.7);
+    --lock-input-bg: rgba(255, 255, 252, 0.78);
+    --lock-input-border: rgba(28, 28, 26, 0.12);
+    --lock-input-placeholder: rgba(102, 103, 97, 0.48);
+    --lock-input-inset: rgba(255, 255, 255, 0.8);
+    --lock-focus-ring: rgba(31, 31, 29, 0.08);
+    --lock-primary-bg: #20201d;
+    --lock-primary-text: #fbfbf8;
+    --lock-primary-shadow: rgba(15, 15, 12, 0.14);
+    --lock-secondary-bg: rgba(255, 255, 252, 0.68);
+    --lock-secondary-hover: rgba(255, 255, 252, 0.9);
+    --lock-disabled-bg: rgba(225, 225, 219, 0.64);
+    --lock-disabled-text: rgba(102, 103, 97, 0.5);
+    --lock-disabled-border: rgba(28, 28, 26, 0.08);
+    --lock-overlay: rgba(7, 6, 4, 0.76);
+    --lock-pending-bg: rgba(201, 149, 67, 0.14);
+    --lock-error-bg: rgba(182, 75, 66, 0.1);
+    --lock-title-font: "Avenir Next", "Gill Sans", "Trebuchet MS", sans-serif;
+    --lock-ui-font: "Avenir Next", "Gill Sans", "Trebuchet MS", sans-serif;
+    --lock-mono-font: "SFMono-Regular", "Cascadia Code", "IBM Plex Mono", monospace;
+    font-family: var(--lock-ui-font);
+    background: var(--lock-bg-deep);
+  }
+
+  p2p-lockstep-app[theme="dark"] {
+    color-scheme: dark;
+    --lock-bg: #151511;
+    --lock-bg-deep: #0d0e0c;
+    --lock-surface: rgba(27, 28, 25, 0.9);
+    --lock-surface-strong: rgba(31, 32, 29, 0.97);
+    --lock-border: rgba(242, 234, 216, 0.12);
+    --lock-border-strong: rgba(242, 234, 216, 0.22);
+    --lock-paper: #f3eee3;
+    --lock-muted: #aaa79d;
+    --lock-dim: #74766f;
+    --lock-bronze: #c89a5a;
+    --lock-bronze-bright: #e0b979;
+    --lock-teal: #69d895;
+    --lock-rose: #e47769;
+    --lock-ink-shadow: rgba(0, 0, 0, 0.38);
+    --lock-app-background: radial-gradient(circle at 48% 48%, rgba(190, 127, 57, 0.13), transparent 34rem), linear-gradient(145deg, #151612, #090a09);
+    --lock-grid-line: rgba(242, 234, 216, 0.028);
+    --lock-panel-background: linear-gradient(145deg, rgba(255, 255, 255, 0.045), transparent 44%), var(--lock-surface);
+    --lock-panel-inset: rgba(255, 255, 255, 0.06);
+    --lock-card: rgba(255, 255, 255, 0.04);
+    --lock-card-strong: rgba(31, 32, 29, 0.97);
+    --lock-card-hover: rgba(255, 255, 255, 0.08);
+    --lock-control: rgba(255, 255, 255, 0.045);
+    --lock-input-bg: rgba(7, 8, 7, 0.42);
+    --lock-input-border: rgba(242, 234, 216, 0.12);
+    --lock-input-placeholder: rgba(170, 167, 157, 0.46);
+    --lock-input-inset: rgba(255, 255, 255, 0.04);
+    --lock-focus-ring: rgba(224, 185, 121, 0.16);
+    --lock-primary-bg: #d0a564;
+    --lock-primary-text: #15130f;
+    --lock-primary-shadow: rgba(187, 128, 57, 0.2);
+    --lock-secondary-bg: rgba(255, 255, 255, 0.035);
+    --lock-secondary-hover: rgba(255, 255, 255, 0.075);
+    --lock-disabled-bg: rgba(255, 255, 255, 0.045);
+    --lock-disabled-text: rgba(243, 238, 227, 0.34);
+    --lock-disabled-border: rgba(242, 234, 216, 0.07);
+    --lock-overlay: rgba(3, 4, 3, 0.8);
+    --lock-pending-bg: rgba(224, 185, 121, 0.12);
+    --lock-error-bg: rgba(228, 119, 105, 0.1);
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    margin: 0;
+    min-height: 100%;
+    background: var(--lock-bg-deep);
+  }
+
+  body {
+    color: var(--lock-paper);
+  }
+
+  button,
+  input {
+    font: inherit;
+  }
+
+  button,
+  summary {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@layer utilities {
+  .lock-title {
+    font-family: var(--lock-title-font);
+  }
+
+  .lock-app-bg {
+    background: var(--lock-app-background);
+  }
+
+  .lock-grid-bg {
+    background-image:
+      linear-gradient(var(--lock-grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--lock-grid-line) 1px, transparent 1px);
+    background-size: 3.25rem 3.25rem;
+  }
+
+  .lock-mono {
+    font-family: var(--lock-mono-font);
+  }
+
+  .lock-panel {
+    border: 1px solid var(--lock-border);
+    background: var(--lock-panel-background);
+    box-shadow:
+      0 12px 34px var(--lock-ink-shadow),
+      inset 0 1px 0 var(--lock-panel-inset);
+    backdrop-filter: blur(12px);
+  }
+
+  .lock-card {
+    border-color: var(--lock-border);
+    background: var(--lock-card);
+  }
+
+  .lock-surface-strong {
+    border-color: var(--lock-border-strong);
+    background: var(--lock-card-strong);
+  }
+
+  .lock-control {
+    border-color: var(--lock-border);
+    background: var(--lock-control);
+  }
+
+  .lock-control:hover {
+    border-color: var(--lock-border-strong);
+    background: var(--lock-card-hover);
+  }
+
+  .lock-theme-option {
+    border: 1px solid var(--lock-border);
+    background: var(--lock-secondary-bg);
+    color: var(--lock-muted);
+    transition:
+      background-color 160ms ease,
+      border-color 160ms ease,
+      color 160ms ease;
+  }
+
+  .lock-theme-option:hover {
+    border-color: var(--lock-border-strong);
+    background: var(--lock-secondary-hover);
+    color: var(--lock-paper);
+  }
+
+  .lock-theme-option[aria-pressed="true"] {
+    border-color: var(--lock-primary-bg);
+    background: var(--lock-primary-bg);
+    color: var(--lock-primary-text);
+  }
+
+  .lock-input {
+    border: 1px solid var(--lock-input-border);
+    background: var(--lock-input-bg);
+    color: var(--lock-paper);
+    box-shadow: inset 0 1px 0 var(--lock-input-inset);
+  }
+
+  .lock-input::placeholder {
+    color: var(--lock-input-placeholder);
+  }
+
+  .lock-input:focus {
+    border-color: var(--lock-bronze-bright);
+    outline: none;
+    box-shadow:
+      0 0 0 3px var(--lock-focus-ring),
+      inset 0 1px 0 var(--lock-input-inset);
+  }
+
+  .lock-primary {
+    background: var(--lock-primary-bg);
+    color: var(--lock-primary-text);
+    box-shadow: 0 8px 20px var(--lock-primary-shadow);
+  }
+
+  .lock-primary:hover {
+    filter: brightness(1.07);
+  }
+
+  .lock-secondary {
+    border: 1px solid var(--lock-input-border);
+    background: var(--lock-secondary-bg);
+    color: var(--lock-paper);
+  }
+
+  .lock-secondary:hover {
+    background: var(--lock-secondary-hover);
+  }
+
+  .lock-disabled:disabled,
+  .lock-disabled[disabled] {
+    cursor: not-allowed;
+    border-color: var(--lock-disabled-border);
+    background: var(--lock-disabled-bg);
+    color: var(--lock-disabled-text);
+    box-shadow: none;
+    filter: none;
+  }
+
+  .lock-enter {
+    animation: lock-enter 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+}
+
+@keyframes lock-enter {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

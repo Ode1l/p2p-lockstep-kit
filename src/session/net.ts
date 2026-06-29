@@ -1,66 +1,131 @@
-// Net Adapter (net): provides a session-facing API over signaling + RTC client.
-// Responsibilities:
-// - Translate raw messages into envelopes for the session router.
-// - Expose register/connect/send/disconnect and connection state hooks.
-import { createClient } from "../network";
-import {
-  resolveMessageDomain,
-  type MessageType,
-  type WireEnvelope as Envelope,
-} from "../utils";
+import type { NetworkClient } from 'p2p-lockstep-kit-network';
+import { parseSessionMessage, type SessionMessage } from './utils';
+import type { BusMessageType, CommandBus } from './commandBus';
 
-export type NetAdapter = {
-  register: (url: string) => Promise<{ peerId: string }>;
-  connect: (targetId: string) => Promise<void>;
-  disconnect: () => void;
-  send: <T>(msg: Envelope<T>) => void;
-  onMessage: (handler: (msg: Envelope) => void) => void;
-  onConnectionState: (handler: (state: RTCPeerConnectionState) => void) => void;
-  state: () => {
-    connectionState: RTCPeerConnectionState;
-    iceConnectionState: RTCIceConnectionState;
-    signalingState: RTCSignalingState;
-  };
-};
+/**
+ * Network client wrapper that bridges NetworkClient with CommandBus
+ * Handles message encoding/decoding and connection state monitoring
+ */
+export class NetClient {
+  private localPeerId: string | null;
+  private remotePeerId: string | null;
+  private isConnected: boolean = false;
+  private connectionChangeListener: (isConnected: boolean) => void = () => {};
+  private mediaStateListener: (active: boolean) => void = () => {};
 
-export const createNetClient = (): NetAdapter => {
-  const client = createClient();
-  const onMessage = (handler: (msg: Envelope) => void) => {
-    client.onMessage((raw) => {
-      try {
-        const msg = JSON.parse(String(raw)) as Envelope;
-        if (msg && typeof msg.type === "string") {
-          const type = msg.type as MessageType;
-          handler({
-            ...msg,
-            type,
-            domain: resolveMessageDomain({ type, domain: msg.domain }),
-          });
-        }
-      } catch {
-        // ignore parse errors
+  public constructor(
+    private readonly client: NetworkClient,
+    private readonly bus: CommandBus,
+    peerId: string | null,
+  ) {
+    this.localPeerId = peerId ?? null;
+    this.remotePeerId = null;
+
+    // Forward incoming messages to the command bus
+    this.client.onMessage((data) => {
+      const message = parseSessionMessage(data);
+      if (!message || typeof message !== 'object' || !message.type) {
+        return;
+      }
+      this.bus.dispatch({
+        ...(message as SessionMessage),
+        type: message.type as BusMessageType,
+        from: 'remote',
+      });
+    });
+
+    // Monitor connection state and emit ONLINE/OFFLINE events
+    this.client.onStateChange((state) => {
+      const wasConnected = this.isConnected;
+      this.isConnected = state === 'connected';
+
+      // Notify listeners of connection state change
+      this.connectionChangeListener(this.isConnected);
+
+      // Only emit ONLINE/OFFLINE once when state changes
+      if (this.isConnected && !wasConnected) {
+        this.bus.emit('ONLINE', undefined, 'local');
+      } else if (!this.isConnected && wasConnected) {
+        this.bus.emit('OFFLINE', undefined, 'local');
       }
     });
-  };
 
-  const send = <T>(msg: Envelope<T>) => {
-    client.send(JSON.stringify(msg));
-  };
+    // Monitor remote media stream availability
+    this.client.onRemoteStream((stream) => {
+      const active =
+        !!stream &&
+        stream.getTracks().some((track) => track.readyState === 'live');
+      this.mediaStateListener(active);
+    });
+  }
 
-  return {
-    register: client.register,
-    connect: client.connect,
-    disconnect: client.disconnect,
-    send,
-    onMessage,
-    onConnectionState: client.onConnectionState,
-    state: client.pcState,
-  };
-};
+  /**
+   * Send a message to the remote peer
+   * Drops message if not connected and logs warning
+   */
+  public send(message: SessionMessage) {
+    if (!this.isConnected) {
+      console.warn(
+        '[NetClient] Cannot send message: not connected',
+        message.type,
+      );
+      return;
+    }
 
-export const createEnvelope = <T>(
-  msg: Envelope<T>,
-): Envelope<T> => ({
-  ...msg,
-  domain: resolveMessageDomain({ type: msg.type, domain: msg.domain }),
-});
+    const enriched: SessionMessage = {
+      ...message,
+      from: message.from ?? this.localPeerId ?? '',
+    };
+    this.client.send(enriched);
+  }
+
+  /**
+   * Update local and remote peer IDs
+   */
+  public setPeerIds(ids: { local?: string | null; remote?: string | null }) {
+    if (ids.local !== undefined) {
+      this.localPeerId = ids.local;
+    }
+    if (ids.remote !== undefined) {
+      this.remotePeerId = ids.remote;
+    }
+  }
+
+  /**
+   * Get current peer IDs
+   */
+  public getPeerIds() {
+    return { local: this.localPeerId, remote: this.remotePeerId };
+  }
+
+  /**
+   * Check if currently connected to peer
+   */
+  public getIsConnected(): boolean {
+    return this.isConnected;
+  }
+
+  /**
+   * Monitor connection state changes
+   * @param handler Called when connection state changes (true=connected, false=disconnected)
+   */
+  public onConnectionChange(handler: (isConnected: boolean) => void) {
+    this.connectionChangeListener = handler;
+    // Immediately call with current state if already have a state
+    handler(this.isConnected);
+  }
+
+  /**
+   * Monitor remote media stream state changes
+   * @param handler Called when remote media becomes available or unavailable
+   */
+  public onMediaStateChange(handler: (active: boolean) => void) {
+    this.mediaStateListener = handler;
+  }
+}
+
+export const createNetClient = (
+  client: NetworkClient,
+  bus: CommandBus,
+  peerId: string | null,
+) => new NetClient(client, bus, peerId);

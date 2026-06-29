@@ -1,159 +1,160 @@
-import type { Logger, MessageType } from "../../utils";
-import type { CommandOrigin } from "../commandRegistry";
+export type SessionState =
+  | 'idle'
+  | 'ready'
+  | 'could_start'
+  | 'turn'
+  | 'remote_turn'
+  | 'approving'
+  | 'waiting_approval'
+  | 'syncing'
+  | 'offline';
 
-export type SessionPhase = "OFFLINE" | "WAITING" | "READY" | "GAMING";
+export type SessionEvent =
+  | 'REMOTE_READY'
+  | 'READY'
+  | 'START'
+  | 'REMOTE_START'
+  | 'MOVE'
+  | 'REMOTE_MOVE'
+  | 'UNDO'
+  | 'REMOTE_UNDO'
+  | 'RESTART'
+  | 'REMOTE_RESTART'
+  | 'APPROVE'
+  | 'REJECT'
+  | 'GAME_OVER'
+  | 'SYNC'
+  | 'SYNC_COMPLETE'
+  | 'OFFLINE'
+  | 'ONLINE';
 
-export type SessionFsm = {
-  getPhase: () => SessionPhase;
-  onConnected: () => void;
-  onDisconnected: () => void;
-  onReadyStateChange: (ready: { self: boolean; peer: boolean }, reason?: string) => void;
-  onMatchStart: (reason?: string) => void;
-  onMatchEnd: (reason?: string) => void;
-  guard: (type: MessageType, origin: CommandOrigin) => { ok: boolean; reason?: string };
+export type Transition = {
+  from: SessionState;
+  event: SessionEvent;
+  to: SessionState;
 };
 
-type GuardRules = Partial<Record<MessageType, SessionPhase[] | "*">>;
+const transitions: Transition[] = [
+  // Pre-match readiness
+  { from: 'idle', event: 'READY', to: 'ready' },
+  { from: 'ready', event: 'READY', to: 'idle' },
+  { from: 'idle', event: 'REMOTE_READY', to: 'could_start' },
+  { from: 'could_start', event: 'REMOTE_READY', to: 'idle' },
+  { from: 'ready', event: 'REJECT', to: 'idle' },
+  { from: 'could_start', event: 'REJECT', to: 'idle' },
 
-const WAITING_OR_READY: SessionPhase[] = ["WAITING", "READY"];
-const ACTIVE_STATES: SessionPhase[] = ["WAITING", "READY", "GAMING"];
-const IN_GAME_ONLY: SessionPhase[] = ["GAMING"];
+  // Match start / turn assignment
+  { from: 'ready', event: 'REMOTE_START', to: 'turn' },
+  { from: 'ready', event: 'REMOTE_START', to: 'remote_turn' },
+  { from: 'could_start', event: 'START', to: 'turn' },
+  { from: 'could_start', event: 'START', to: 'remote_turn' },
 
-const LOCAL_RULES: GuardRules = {
-  READY: WAITING_OR_READY,
-  START: ["READY"],
-  UNDO: IN_GAME_ONLY,
-  RESTART: WAITING_OR_READY,
-  MOVE: IN_GAME_ONLY,
-};
+  // Turn swapping after moves
+  { from: 'turn', event: 'MOVE', to: 'remote_turn' },
+  { from: 'remote_turn', event: 'REMOTE_MOVE', to: 'turn' },
+  { from: 'turn', event: 'REJECT', to: 'turn' },
+  { from: 'remote_turn', event: 'REJECT', to: 'remote_turn' },
 
-const REMOTE_RULES: GuardRules = {
-  READY: WAITING_OR_READY,
-  START: ["READY"],
-  UNDO: IN_GAME_ONLY,
-  MOVE: IN_GAME_ONLY,
-  RESTART: WAITING_OR_READY,
-  APPROVE: ACTIVE_STATES,
-  REJECT: ACTIVE_STATES,
-  REJOIN: ACTIVE_STATES,
-  SYNC_REQUEST: ACTIVE_STATES,
-  SYNC_STATE: ACTIVE_STATES,
-};
+  // Requests initiated by local player (undo/restart)
+  { from: 'turn', event: 'UNDO', to: 'waiting_approval' },
+  { from: 'remote_turn', event: 'UNDO', to: 'waiting_approval' },
+  { from: 'turn', event: 'RESTART', to: 'waiting_approval' },
+  { from: 'remote_turn', event: 'RESTART', to: 'waiting_approval' },
 
-const LOCAL_REASONS: Partial<Record<MessageType, string>> = {
-  READY: "Ready/Unready is only available while in the lobby.",
-  START: "Both players must be ready before starting.",
-  MOVE: "The game has not started yet.",
-  UNDO: "Undo can only be requested during a game.",
-  RESTART: "Restart is only available from the lobby.",
-};
+  // Requests coming from remote (we need to approve)
+  { from: 'turn', event: 'REMOTE_UNDO', to: 'approving' },
+  { from: 'remote_turn', event: 'REMOTE_UNDO', to: 'approving' },
+  { from: 'turn', event: 'REMOTE_RESTART', to: 'approving' },
+  { from: 'remote_turn', event: 'REMOTE_RESTART', to: 'approving' },
 
-const defaultReasonForPhase = (phase: SessionPhase) => {
-  switch (phase) {
-    case "OFFLINE":
-      return "Connect to a peer first.";
-    case "GAMING":
-      return "A match is already in progress.";
-    default:
-      return "Action is not allowed right now.";
+  // Approval outcomes when we were waiting for the peer.
+  { from: 'waiting_approval', event: 'APPROVE', to: 'turn' },
+  { from: 'waiting_approval', event: 'REJECT', to: 'turn' },
+  { from: 'waiting_approval', event: 'REJECT', to: 'remote_turn' },
+
+  // Approval outcomes when we were confirming the peer's request.
+  // The target turn is explicit because resumeTurn decides who continues.
+  { from: 'approving', event: 'APPROVE', to: 'remote_turn' },
+  { from: 'approving', event: 'REJECT', to: 'remote_turn' },
+  { from: 'approving', event: 'REJECT', to: 'turn' },
+
+  // Game end resets back to the pre-match idle state
+  { from: 'turn', event: 'GAME_OVER', to: 'idle' },
+  { from: 'remote_turn', event: 'GAME_OVER', to: 'idle' },
+
+  // Rejoin/sync flows
+  { from: 'turn', event: 'SYNC', to: 'syncing' },
+  { from: 'remote_turn', event: 'SYNC', to: 'syncing' },
+  { from: 'waiting_approval', event: 'SYNC', to: 'syncing' },
+  { from: 'approving', event: 'SYNC', to: 'syncing' },
+  { from: 'idle', event: 'SYNC', to: 'syncing' },
+  { from: 'ready', event: 'SYNC', to: 'syncing' },
+  { from: 'could_start', event: 'SYNC', to: 'syncing' },
+  { from: 'syncing', event: 'SYNC_COMPLETE', to: 'turn' },
+  { from: 'syncing', event: 'SYNC_COMPLETE', to: 'remote_turn' },
+
+  // Connection state
+  { from: 'idle', event: 'OFFLINE', to: 'offline' },
+  { from: 'ready', event: 'OFFLINE', to: 'offline' },
+  { from: 'could_start', event: 'OFFLINE', to: 'offline' },
+  { from: 'turn', event: 'OFFLINE', to: 'offline' },
+  { from: 'remote_turn', event: 'OFFLINE', to: 'offline' },
+  { from: 'waiting_approval', event: 'OFFLINE', to: 'offline' },
+  { from: 'approving', event: 'OFFLINE', to: 'offline' },
+  { from: 'syncing', event: 'OFFLINE', to: 'offline' },
+  { from: 'offline', event: 'ONLINE', to: 'syncing' },
+];
+// only receive 'to' from state. never receive from handlers.
+const nextState = (
+  state: SessionState,
+  event: SessionEvent,
+  to?: SessionState, // next turn or pending action
+): SessionState => {
+  if (to) {
+    if (
+      !!transitions.find(
+        (t) => t.from === state && t.event === event && t.to === to,
+      )
+    ) {
+      return to;
+    } else {
+      return state;
+    }
+  } else {
+    const hit = transitions.find((t) => t.from === state && t.event === event);
+    return hit ? hit.to : state;
   }
 };
 
-const isAllowed = (
-  rules: GuardRules,
-  type: MessageType,
-  phase: SessionPhase,
+const hasNextState = (
+  state: SessionState,
+  action: SessionEvent,
+  to?: SessionState,
 ): boolean => {
-  const allowed = rules[type];
-  if (!allowed) {
-    return true;
+  if (to) {
+    return !!transitions.find(
+      (t) => t.from === state && t.event === action && t.to === to,
+    );
   }
-  if (allowed === "*") {
-    return true;
-  }
-  return allowed.includes(phase);
+  return !!transitions.find((t) => t.from === state && t.event === action);
 };
 
-export const createSessionFsm = (deps: { logger: Logger }): SessionFsm => {
-  const { logger } = deps;
-  let phase: SessionPhase = "OFFLINE";
-  let connected = false;
-  let readyState: { self: boolean; peer: boolean } = { self: false, peer: false };
+export class SessionFsm {
+  private state: SessionState;
 
-  const transition = (next: SessionPhase, reason?: string) => {
-    if (phase === next) {
-      return;
-    }
-    phase = next;
-    logger.info("[session:fsm] transition", { next, reason });
-  };
+  constructor(state: SessionState = 'idle') {
+    this.state = state;
+  }
 
-  const evaluateReady = (reason?: string, force = false) => {
-    if (!connected) {
-      return;
-    }
-    if (!force && phase === "GAMING") {
-      return;
-    }
-    const next = readyState.self && readyState.peer ? "READY" : "WAITING";
-    transition(next, reason);
-  };
+  public getState(): SessionState {
+    return this.state;
+  }
 
-  const onConnected = () => {
-    connected = true;
-    if (phase === "GAMING") {
-      return;
-    }
-    evaluateReady("connected");
-  };
+  public hasNextState(event: SessionEvent, to?: SessionState): boolean {
+    return hasNextState(this.state, event, to);
+  }
 
-  const onDisconnected = () => {
-    connected = false;
-    transition("OFFLINE", "disconnected");
-  };
-
-  const onReadyStateChange = (
-    ready: { self: boolean; peer: boolean },
-    reason?: string,
-  ) => {
-    readyState = ready;
-    evaluateReady(reason ?? "ready-change");
-  };
-
-  const onMatchStart = (reason?: string) => {
-    if (!connected) {
-      connected = true;
-    }
-    transition("GAMING", reason ?? "match-start");
-  };
-
-  const onMatchEnd = (reason?: string) => {
-    if (!connected) {
-      transition("OFFLINE", reason ?? "match-end-offline");
-      return;
-    }
-    evaluateReady(reason ?? "match-end", true);
-  };
-
-  const guard = (type: MessageType, origin: CommandOrigin) => {
-    const ok = isAllowed(origin === "local" ? LOCAL_RULES : REMOTE_RULES, type, phase);
-    if (ok) {
-      return { ok: true };
-    }
-    const reason =
-      origin === "local"
-        ? LOCAL_REASONS[type] ?? defaultReasonForPhase(phase)
-        : `Dropping ${type} while session state is ${phase}`;
-    return { ok: false, reason };
-  };
-
-  return {
-    getPhase: () => phase,
-    onConnected,
-    onDisconnected,
-    onReadyStateChange,
-    onMatchStart,
-    onMatchEnd,
-    guard,
-  };
-};
+  public dispatch(action: SessionEvent, to?: SessionState) {
+    this.state = nextState(this.state, action, to);
+  }
+}

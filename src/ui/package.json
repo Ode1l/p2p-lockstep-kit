@@ -1,0 +1,29 @@
+{
+  "name": "p2p-lockstep-kit",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.7.0",
+  "scripts": {
+    "build": "pnpm typecheck && vite build",
+    "build:pages": "pnpm typecheck && vite build --outDir dist-pages",
+    "dev": "vite",
+    "preview": "vite preview",
+    "preview:pages": "vite preview --outDir dist-pages",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "format": "prettier -w ../.."
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.13",
+    "@types/qrcode": "^1.5.5",
+    "prettier": "^3.3.1",
+    "tailwindcss": "^4.1.13",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.8",
+    "vitest": "^4.1.2"
+  }
+}

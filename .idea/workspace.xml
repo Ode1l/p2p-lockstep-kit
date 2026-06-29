@@ -1,0 +1,330 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="9baf6ae0-802d-49e6-ad31-f8c289d6477f" name="Changes" comment="feat: templates/game-plugin.ts">
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.prettierrc" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/RTCConfiguration.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/architecture-notes.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/session-handoff.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/session-overview.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/package.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/playground/gomoku-demo/README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/playground/gomoku-demo/index.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/playground/gomoku-demo/package.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/playground/gomoku-demo/src/game/hash.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/playground/gomoku-demo/src/game/rules.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/playground/gomoku-demo/src/game/state.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/playground/gomoku-demo/src/gomoku-plugin/index.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/playground/gomoku-demo/src/gomoku-plugin/rule-guard.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/playground/gomoku-demo/src/main.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/playground/gomoku-demo/src/ui/board.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/playground/gomoku-demo/vite.config.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/playground/playground-signaling-webrtc/configuration.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/playground/playground-signaling-webrtc/index.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/playground/playground-signaling-webrtc/package.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/playground/playground-signaling-webrtc/src/configuration.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/playground/playground-signaling-webrtc/src/main.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/playground/playground-signaling/configuration.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/playground/playground-signaling/index.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/playground/playground-signaling/package.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/playground/playground-signaling/src/main.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/playground/playground-webrtc-auto/index.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/playground/playground-webrtc-auto/package.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/playground/playground-webrtc-auto/src/configuration.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/playground/playground-webrtc-auto/src/main.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/playground/playground-webrtc-auto/src/peer.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/playground/playground-webrtc-auto/src/signaling.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/playground/playground-webrtc-auto/src/state.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/playground/playground-webrtc-hand/index.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/playground/playground-webrtc-hand/package.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/playground/playground-webrtc-hand/src/configuration.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/playground/playground-webrtc-hand/src/main.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/playground/playground-webrtc-hand/src/peerType.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/playground/signaling-server/configuration.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/playground/signaling-server/package.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/playground/signaling-server/src/server.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pnpm-workspace.yaml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/game/handlers/move.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/game/handlers/undo.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/game/rules/index.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/game/rules/movePolicy.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/game/types.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/index.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/network/index.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/network/signaling/client.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/network/signaling/emitter.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/network/signaling/session.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/network/state/peerState.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/network/transport/configuration.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/network/transport/rtcPeer.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/session/commandMiddleware.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/session/commandRegistry.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/session/controller.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/session/flow.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/session/handlers/approve.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/session/handlers/ready.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/session/handlers/reject.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/session/handlers/restart.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/session/handlers/start.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/session/hooks/connection.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/session/index.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/session/net.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/session/policy.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/session/ports/notifier.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/session/ports/sender.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/session/rejoin/choice.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/session/rejoin/handler.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/session/sessionTypes.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/session/state/fsm.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/session/state/pending.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/session/state/state.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ui/desktopShell/index.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ui/desktopShell/ui/desktopShellUi.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ui/desktopShell/ui/styles.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ui/shell/index.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ui/shell/shell.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ui/shell/ui.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ui/shell/ui/index.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ui/shell/ui/layout.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ui/shell/ui/panel.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ui/shell/ui/requests.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ui/shell/ui/shellUi.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ui/shell/ui/styles.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/utils/index.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/utils/logger.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/utils/protocol/envelope.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/utils/protocol/game.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/utils/protocol/index.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/utils/protocol/session.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/utils/protocol/signaling.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/utils/serialization/index.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/utils/serialization/json.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/game-plugin.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tsconfig.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/tsup.config.ts" beforeDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="CopilotPersistence">
+    <persistenceIdMap>
+      <entry key="_/Users/ode1l/Documents/Jetbrain/WebStorm/p2p-lockstep-kit" value="39f4TE8n5of50dLHzPaUpUBQl5w" />
+    </persistenceIdMap>
+  </component>
+  <component name="CopilotUserSelectedModel">
+    <selectedModels>
+      <entry key="edit-panel" value="GPT-5 mini" />
+      <entry key="chat-panel" value="GPT-5 mini" />
+      <entry key="agent-panel" value="GPT-5 mini" />
+    </selectedModels>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_BRANCH_BY_REPOSITORY">
+      <map>
+        <entry key="$PROJECT_DIR$" value="temp" />
+      </map>
+    </option>
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;Ode1l&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/Ode1l/p2p-lockstep-kit.git&quot;,
+    &quot;accountId&quot;: &quot;09eeae17-dc7e-4515-824d-5a49e80dfc0d&quot;
+  },
+  &quot;recentNewPullRequestHead&quot;: {
+    &quot;server&quot;: {
+      &quot;useHttp&quot;: false,
+      &quot;host&quot;: &quot;github.com&quot;,
+      &quot;port&quot;: null,
+      &quot;suffix&quot;: null
+    },
+    &quot;owner&quot;: &quot;Ode1l&quot;,
+    &quot;repository&quot;: &quot;p2p-lockstep-kit&quot;
+  }
+}</component>
+  <component name="ProblemsViewState">
+    <option name="selectedTabId" value="CurrentFile" />
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 2
+}</component>
+  <component name="ProjectId" id="39f4TE8n5of50dLHzPaUpUBQl5w" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
+    &quot;codeWithMe.voiceChat.enabledByDefault&quot;: &quot;false&quot;,
+    &quot;copilot.chat.legacySessionMetadata.migrated&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
+    &quot;javascript.preferred.runtime.type.id&quot;: &quot;node&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/Users/ode1l/Documents/Jetbrain/WebStorm/p2p-lockstep-kit&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;npm.gomoku-demo &gt; build.executor&quot;: &quot;Run&quot;,
+    &quot;npm.gomoku-demo &gt; dev.executor&quot;: &quot;Run&quot;,
+    &quot;prettierjs.PrettierConfiguration.Package&quot;: &quot;/Users/ode1l/Documents/Jetbrain/WebStorm/p2p-lockstep-kit/node_modules/prettier&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;terminal&quot;,
+    &quot;ts.external.directory.path&quot;: &quot;/Users/ode1l/Documents/Jetbrain/WebStorm/p2p-lockstep-kit/node_modules/typescript/lib&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  }
+}</component>
+  <component name="RunManager" selected="npm.gomoku-demo &gt; dev">
+    <configuration name="gomoku-demo &gt; build" type="js.build_tools.npm" temporary="true" nameIsGenerated="true">
+      <package-json value="$PROJECT_DIR$/playground/gomoku-demo/package.json" />
+      <command value="run" />
+      <scripts>
+        <script value="build" />
+      </scripts>
+      <node-interpreter value="project" />
+      <envs />
+      <method v="2" />
+    </configuration>
+    <configuration name="gomoku-demo &gt; dev" type="js.build_tools.npm" temporary="true" nameIsGenerated="true">
+      <package-json value="$PROJECT_DIR$/playground/gomoku-demo/package.json" />
+      <command value="run" />
+      <scripts>
+        <script value="dev" />
+      </scripts>
+      <node-interpreter value="project" />
+      <envs />
+      <method v="2" />
+    </configuration>
+    <recent_temporary>
+      <list>
+        <item itemvalue="npm.gomoku-demo &gt; dev" />
+        <item itemvalue="npm.gomoku-demo &gt; build" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-js-predefined-d6986cc7102b-31caf2ab9e3c-JavaScript-WS-261.25134.101" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="9baf6ae0-802d-49e6-ad31-f8c289d6477f" name="Changes" comment="" />
+      <created>1742506531705</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1742506531705</updated>
+      <workItem from="1742506535848" duration="308000" />
+      <workItem from="1771073799314" duration="11551000" />
+      <workItem from="1771099285883" duration="1460000" />
+      <workItem from="1771105131416" duration="9801000" />
+      <workItem from="1773117324130" duration="2708000" />
+      <workItem from="1773121210094" duration="3892000" />
+      <workItem from="1773168717172" duration="5599000" />
+      <workItem from="1773278308335" duration="148000" />
+      <workItem from="1773279267053" duration="3546000" />
+      <workItem from="1773558123970" duration="771000" />
+      <workItem from="1776211608632" duration="938000" />
+      <workItem from="1782397398422" duration="601000" />
+      <workItem from="1782697321304" duration="2097000" />
+    </task>
+    <task id="LOCAL-00001" summary="refactor: session and game">
+      <option name="closed" value="true" />
+      <created>1771097928137</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1771097928137</updated>
+    </task>
+    <task id="LOCAL-00002" summary="feat: desktop ui">
+      <option name="closed" value="true" />
+      <created>1771099527864</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1771099527864</updated>
+    </task>
+    <task id="LOCAL-00003" summary="feat: highlight lastmove">
+      <option name="closed" value="true" />
+      <created>1771100742089</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1771100742089</updated>
+    </task>
+    <task id="LOCAL-00004" summary="refactor: promise design">
+      <option name="closed" value="true" />
+      <created>1771108925456</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1771108925456</updated>
+    </task>
+    <task id="LOCAL-00005" summary="feat: templates/game-plugin.ts">
+      <option name="closed" value="true" />
+      <created>1773153301940</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1773153301940</updated>
+    </task>
+    <option name="localTasksCounter" value="6" />
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State>
+              <option name="FILTERS">
+                <map>
+                  <entry key="branch">
+                    <value>
+                      <list>
+                        <option value="master" />
+                      </list>
+                    </value>
+                  </entry>
+                </map>
+              </option>
+            </State>
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="refactor: session and game" />
+    <MESSAGE value="feat: desktop ui" />
+    <MESSAGE value="feat: highlight lastmove" />
+    <MESSAGE value="refactor: promise design" />
+    <MESSAGE value="feat: templates/game-plugin.ts" />
+    <option name="LAST_COMMIT_MESSAGE" value="feat: templates/game-plugin.ts" />
+  </component>
+  <component name="github-copilot-workspace">
+    <instructionFileLocations>
+      <option value=".github/instructions" />
+    </instructionFileLocations>
+    <promptFileLocations>
+      <option value=".github/prompts" />
+    </promptFileLocations>
+  </component>
+</project>

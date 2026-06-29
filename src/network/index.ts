@@ -1,94 +1,143 @@
-import { createSignalingClient } from "./signaling/client";
-import { createRtcPeer } from "./transport/rtcPeer";
-import { clearSession, loadSession, saveSession } from "./signaling/session";
+import {SignalingClient} from "./signaling/client";
+import {RtcPeer} from "./transport/rtcPeer";
+import {clearSession, isExpired, loadSession, saveSession} from "./signaling/session";
+import type {MediaState, PeerState} from "./state/peerState";
+import {decode, encode} from "./utils";
 
-export type Facade = {
-  register: (url: string) => Promise<{ peerId: string }>;
-  connect: (targetId: string) => Promise<void>;
-  send: (data: string) => void;
-  disconnect: () => void;
-  onMessage: (handler: (data: unknown) => void) => void;
-  onConnectionState: (handler: (state: RTCPeerConnectionState) => void) => void;
-  pcState: () => {
-    connectionState: RTCPeerConnectionState;
-    iceConnectionState: RTCIceConnectionState;
-    signalingState: RTCSignalingState;
-  };
-};
+export class NetworkClient {
+    private readonly signaling: SignalingClient;
+    private peer: RtcPeer | null = null;
+    private onMessageHandler: ((data: unknown) => void) | null = null;
+    private onRemoteStreamHandler: ((stream: MediaStream | null) => void) | null = null;
+    private pendingMediaStream: MediaStream | null = null;
+    private onStateChangeHandler: ((state: PeerState) => void) | null = null;
+    private onMediaChangeHandler: ((state: MediaState) => void) | null = null;
 
-export const createClient = (): Facade => {
-  const signaling = createSignalingClient();
-  let peer: ReturnType<typeof createRtcPeer> | null = null;
-  let onMessageHandler: ((data: unknown) => void) | null = null;
-  let onConnectionHandler: ((state: RTCPeerConnectionState) => void) | null = null;
-
-  const register = async (url: string) => {
-    await signaling.connect(url);
-    const cached = loadSession();
-    let result: { peerId: string; iceServers: RTCIceServer[]; resumeToken: string } | null =
-      null;
-    if (cached) {
-      try {
-        result = await signaling.resume({
-          peerId: cached.peerId,
-          resumeToken: cached.resumeToken,
-        });
-      } catch {
-        clearSession();
-      }
+    public constructor(signaling = new SignalingClient()) {
+        this.signaling = signaling;
     }
-    if (!result) {
-      result = await signaling.register();
+
+    public async register(url: string) {
+        this.peer?.dispose();
+        this.peer = null;
+        await this.signaling.connect(url);
+        const cached = loadSession();
+        let result: { peerId: string; iceServers: RTCIceServer[]; resumeToken: string } | null =
+            null;
+        if (cached && isExpired(cached)) {
+            clearSession();
+        } else if (cached) {
+            try {
+                result = await this.signaling.resume({
+                    peerId: cached.peerId,
+                    resumeToken: cached.resumeToken,
+                });
+            } catch {
+                clearSession();
+            }
+        }
+        if (!result) {
+            result = await this.signaling.register();
+        }
+        if (result.resumeToken) {
+            saveSession({
+                peerId: result.peerId,
+                resumeToken: result.resumeToken,
+                updatedAt: Date.now(),
+            });
+        }
+        const pc = new RTCPeerConnection({iceServers: result.iceServers});
+        this.peer = new RtcPeer(result.peerId, pc, this.signaling,
+            (data) => {
+                try {
+                    const parsed = decode<unknown>(String(data));
+                    this.onMessageHandler?.(parsed);
+                } catch {
+                    this.onMessageHandler?.(data);
+                }
+            },
+            (stream) => {
+                this.onRemoteStreamHandler?.(stream);
+            },
+            (state) => {
+                this.onStateChangeHandler?.(state);
+            },
+            (state) => {
+                this.onMediaChangeHandler?.(state);
+            }
+
+        );
+        if (this.onRemoteStreamHandler) {
+            this.peer.onRemoteStream(this.onRemoteStreamHandler);
+        }
+        if (this.onStateChangeHandler) {
+            this.onStateChangeHandler(this.peer.getPeerState());
+        }
+        if (this.onMediaChangeHandler) {
+            this.onMediaChangeHandler(this.peer.getMediaState());
+        }
+        if (this.pendingMediaStream) {
+            this.peer.startMedia(this.pendingMediaStream);
+        }
+        return {peerId: result.peerId};
     }
-    if (result.resumeToken) {
-      saveSession({
-        peerId: result.peerId,
-        resumeToken: result.resumeToken,
-        updatedAt: Date.now(),
-      });
+
+    public async connect(targetId: string) {
+        if (!this.peer) {
+            return;
+        }
+        await this.peer.connect(targetId);
     }
-    const pc = new RTCPeerConnection({ iceServers: result.iceServers });
-    peer = createRtcPeer(result.peerId, pc, signaling, (data) => {
-      onMessageHandler?.(data);
-    });
-    if (onConnectionHandler) {
-      peer.onConnectionState(onConnectionHandler);
+
+    public send(data: unknown) {
+        const payload = encode(data);
+        this.peer?.send(payload);
     }
-    return { peerId: result.peerId };
-  };
 
-  const connect = async (targetId: string) => {
-    if (!peer) {
-      return;
+    public disconnect() {
+        this.peer?.disconnect();
     }
-    await peer.connect(targetId);
-  };
 
-  const send = (data: string) => {
-    peer?.send(data);
-  };
+    /**
+     * eg：
+     * client.onMessage((payload) => {
+     *   const text = String(payload);
+     *   console.log("peer says", text);
+     * });
+     */
+    public onMessage(handler: (data: unknown) => void) {
+        this.onMessageHandler = handler;
+    }
 
-  const disconnect = () => {
-    peer?.disconnect();
-  };
+    public startMedia(stream: MediaStream) {
+        this.pendingMediaStream = stream;
+        this.peer?.startMedia(stream);
+    }
 
-  const onMessage = (handler: (data: unknown) => void) => {
-    onMessageHandler = handler;
-  };
+    public stopMedia() {
+        this.pendingMediaStream = null;
+        this.peer?.stopMedia();
+    }
 
-  const onConnectionState = (handler: (state: RTCPeerConnectionState) => void) => {
-    onConnectionHandler = handler;
-    peer?.onConnectionState(handler);
-  };
+    public onRemoteStream(handler: (stream: MediaStream | null) => void) {
+        this.onRemoteStreamHandler = handler;
+        this.peer?.onRemoteStream(handler);
+    }
 
-  const pcState = () => {
-    const pc = peer?.getPc();
-    return {
-      connectionState: pc?.connectionState ?? "new",
-      iceConnectionState: pc?.iceConnectionState ?? "new",
-      signalingState: pc?.signalingState ?? "stable",
-    };
-  };
+    public onStateChange(handler: (state: PeerState) => void) {
+      this.onStateChangeHandler = handler;
+      handler(this.peer?.getPeerState() ?? "passive");
+    }
 
-  return { register, connect, send, disconnect, onMessage, onConnectionState, pcState };
-};
+    public onMediaChange(handler: (state: MediaState) => void) {
+      this.onMediaChangeHandler = handler;
+      handler(this.peer?.getMediaState() ?? "idle");
+    }
+
+    public getLocalPeerId = () => this.peer?.getPeerId() ?? null;
+    public getRemotePeerId = () => this.peer?.getRemoteId() ?? null;
+    public peerState = (): PeerState => this.peer?.getPeerState() ?? "passive";
+    public mediaState = (): MediaState => this.peer?.getMediaState() ?? "idle";
+}
+
+export const createClient = () => new NetworkClient();
