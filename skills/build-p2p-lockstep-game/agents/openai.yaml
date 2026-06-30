@@ -1,0 +1,4 @@
+interface:
+  display_name: "Build P2P Lockstep Game"
+  short_description: "Build deterministic 1v1 browser games with the lockstep kit"
+  default_prompt: "Use $build-p2p-lockstep-game to build a tested, responsive 1v1 turn-based browser game with p2p-lockstep-kit."
