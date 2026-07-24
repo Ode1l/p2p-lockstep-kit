@@ -1,6 +1,6 @@
 import type { CommandListener } from '../commandBus';
 import { getBus, getState, send } from '../context';
-import { consoleLogger } from '../utils';
+import { consoleLogger } from '../../utils';
 
 /**
  * Handle undo request from local or remote player

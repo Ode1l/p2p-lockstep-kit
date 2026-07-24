@@ -1,6 +1,6 @@
 import type { CommandListener } from '../commandBus';
 import { getBus, getSid, getState, send } from '../context';
-import { consoleLogger, type SessionMessage } from '../utils';
+import { consoleLogger, type SessionMessage } from '../../utils';
 
 /**
  * Handle player ready status notification

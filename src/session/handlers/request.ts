@@ -1,15 +1,26 @@
 import type { CommandListener } from '../commandBus';
 import { getState, send } from '../context';
-import { consoleLogger } from '../utils';
+import { consoleLogger } from '../../utils';
 
-type RequestAction = 'undo' | 'restart';
+type RequestAction = 'undo' | 'restart' | 'draw';
 type RequestPayload = {
   action?: string;
   reason?: string;
 };
 
 const isRequestAction = (value: unknown): value is RequestAction =>
-  value === 'undo' || value === 'restart';
+  value === 'undo' || value === 'restart' || value === 'draw';
+
+const applyApprovedAction = (action: RequestAction): void => {
+  const state = getState();
+  if (action === 'undo') {
+    state.applyUndo(state.getPendingUndoCount() ?? 1);
+  } else if (action === 'restart') {
+    state.resetGame();
+  } else {
+    state.completeGame({ kind: 'draw', reason: 'agreement' });
+  }
+};
 
 /**
  * Handle approval/rejection of pending requests (undo/restart)
@@ -83,12 +94,7 @@ export const request: CommandListener = (command) => {
       // Use special method for complex APPROVE transition
       state.dispatchApprove();
 
-      // Apply the approved action (undo or restart)
-      if (action === 'undo') {
-        state.applyUndo(state.getPendingUndoCount() ?? 1);
-      } else if (action === 'restart') {
-        state.resetGame();
-      }
+      applyApprovedAction(action);
 
       send({ type: 'APPROVE', payload: { action } });
       state.clearPendingStates();
@@ -127,12 +133,7 @@ export const request: CommandListener = (command) => {
     // Use special method for complex APPROVE transition
     state.dispatchApprove();
 
-    // Apply the approved action (undo or restart)
-    if (action === 'undo') {
-      state.applyUndo(state.getPendingUndoCount() ?? 1);
-    } else if (action === 'restart') {
-      state.resetGame();
-    }
+    applyApprovedAction(action);
 
     state.clearPendingStates();
     consoleLogger.debug('[session:request] remote approved', { action });

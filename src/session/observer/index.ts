@@ -1,11 +1,12 @@
 import type {
+  GameOutcome,
   PendingAction,
   PlayerLabel,
   TurnEntry,
   State,
 } from '../state/state';
 import type { SessionState } from '../state/fsm';
-import { consoleLogger } from '../utils';
+import { consoleLogger } from '../../utils';
 
 export interface GameStateSnapshot {
   localState: SessionState;
@@ -14,6 +15,7 @@ export interface GameStateSnapshot {
   history: TurnEntry[];
   lastStart: PlayerLabel | null;
   pendingAction: PendingAction;
+  outcome: GameOutcome | null;
   connected: boolean;
 }
 
@@ -25,6 +27,8 @@ export interface GameEvent {
     | 'GAME_OVER'
     | 'UNDO'
     | 'RESTART'
+    | 'DRAW'
+    | 'RESIGN'
     | 'OFFLINE'
     | 'ONLINE'
     | 'SYNC'
@@ -195,6 +199,7 @@ export function buildGameStateSnapshot(
     history: state.getHistory(),
     lastStart: state.getLastStart(),
     pendingAction: state.getPendingAction(),
+    outcome: state.getOutcome(),
     connected,
   };
 }

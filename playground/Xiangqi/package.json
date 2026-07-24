@@ -1,0 +1,27 @@
+{
+  "name": "p2p-lockstep-xiangqi",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Private peer-to-peer Chinese chess in the browser.",
+  "license": "GPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "pnpm typecheck && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "p2p-lockstep-kit-ui": "^0.1.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.1",
+    "p2p-lockstep-kit-session": "^0.1.13",
+    "tailwindcss": "^4.3.1",
+    "typescript": "^5.9.3",
+    "vite": "^8.1.0",
+    "vitest": "^4.1.2"
+  },
+  "packageManager": "pnpm@10.32.0"
+}

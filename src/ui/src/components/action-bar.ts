@@ -8,6 +8,10 @@ const defaultState: ActionBarState = {
   canStart: false,
   canUndo: false,
   canRestart: false,
+  canOfferDraw: false,
+  canResign: false,
+  allowDraw: false,
+  allowResign: false,
   started: false,
   connectionState: "idle",
 };
@@ -46,6 +50,10 @@ export class P2PLockstepActionBarElement extends HTMLElement {
       canStart,
       canUndo,
       canRestart,
+      canOfferDraw,
+      canResign,
+      allowDraw,
+      allowResign,
       connected,
       readySelf,
       started,
@@ -65,6 +73,8 @@ export class P2PLockstepActionBarElement extends HTMLElement {
             ? "Waiting"
             : "Waiting for connection";
     const showPrimary = !started || Boolean(primaryAction);
+    const showSecondary =
+      started || canUndo || canRestart || canOfferDraw || canResign;
     const stageLabel = started
       ? "In game"
       : canStart
@@ -101,7 +111,9 @@ export class P2PLockstepActionBarElement extends HTMLElement {
               : ""
           }
 
-          <div class="grid grid-cols-2 gap-2 sm:gap-3">
+          ${
+            showSecondary
+              ? `<div class="grid grid-cols-2 gap-2 sm:gap-3">
             <button
               type="button"
               data-action="undo"
@@ -118,7 +130,33 @@ export class P2PLockstepActionBarElement extends HTMLElement {
             >
               Restart
             </button>
-          </div>
+            ${
+              allowDraw
+                ? `<button
+                    type="button"
+                    data-action="draw"
+                    class="lock-secondary lock-disabled inline-flex items-center justify-center rounded-full px-3 py-2.5 text-xs font-semibold transition sm:px-4 sm:py-3 sm:text-sm"
+                    ${canOfferDraw ? "" : "disabled"}
+                  >
+                    Offer draw
+                  </button>`
+                : ""
+            }
+            ${
+              allowResign
+                ? `<button
+                    type="button"
+                    data-action="resign"
+                    class="lock-disabled inline-flex items-center justify-center rounded-full border border-[var(--lock-border)] bg-[var(--lock-error-bg)] px-3 py-2.5 text-xs font-semibold text-[var(--lock-rose)] transition hover:border-[var(--lock-border-strong)] sm:px-4 sm:py-3 sm:text-sm"
+                    ${canResign ? "" : "disabled"}
+                  >
+                    Resign
+                  </button>`
+                : ""
+            }
+          </div>`
+              : ""
+          }
         </div>
       </section>
     `;

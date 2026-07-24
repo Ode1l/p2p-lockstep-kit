@@ -14,12 +14,17 @@ const defaultState: GamePageState = {
   canStart: false,
   canUndo: false,
   canRestart: false,
+  canOfferDraw: false,
+  canResign: false,
+  allowDraw: false,
+  allowResign: false,
   started: false,
   currentTurn: 1,
   turnOwner: null,
   localState: "idle",
   remoteState: "idle",
   pendingAction: null,
+  outcome: null,
   sessionId: "default-session",
   historyLength: 0,
   lastStart: null,
@@ -56,7 +61,7 @@ export class P2PLockstepGamePageElement extends HTMLElement {
   render() {
     this.className = "block h-full";
     this.innerHTML = `
-      <section class="flex h-[calc(100svh-1.5rem)] flex-col items-center gap-2.5 overflow-visible sm:h-auto sm:min-h-[calc(100svh-3rem)] sm:gap-4 lg:grid lg:h-full lg:min-h-[32rem] lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start lg:gap-5">
+      <section class="flex min-h-[calc(100svh-1.5rem)] flex-col items-center gap-2.5 sm:min-h-[calc(100svh-3rem)] sm:gap-4 lg:grid lg:h-full lg:min-h-[32rem] lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start lg:gap-5">
         <aside class="contents lg:relative lg:z-40 lg:col-start-2 lg:row-start-1 lg:flex lg:w-full lg:flex-col lg:gap-3">
           <div class="relative z-40 order-1 w-full max-w-[45rem] lg:order-none lg:max-w-none">
             <p2p-lockstep-status-panel></p2p-lockstep-status-panel>
@@ -67,7 +72,7 @@ export class P2PLockstepGamePageElement extends HTMLElement {
           </div>
         </aside>
 
-        <div class="order-2 min-h-0 w-full max-w-[45rem] flex-1 lg:order-none lg:col-start-1 lg:row-start-1 lg:h-full lg:max-w-none">
+        <div class="order-2 w-full max-w-[45rem] flex-none sm:min-h-0 sm:flex-1 lg:order-none lg:col-start-1 lg:row-start-1 lg:h-full lg:max-w-none">
           <p2p-lockstep-board-host></p2p-lockstep-board-host>
         </div>
       </section>
@@ -101,6 +106,7 @@ export class P2PLockstepGamePageElement extends HTMLElement {
       readySelf: this.#state.readySelf,
       readyPeer: this.#state.readyPeer,
       pendingAction: this.#state.pendingAction,
+      outcome: this.#state.outcome,
       sessionId: this.#state.sessionId,
       historyLength: this.#state.historyLength,
       lastStart: this.#state.lastStart,
@@ -114,6 +120,10 @@ export class P2PLockstepGamePageElement extends HTMLElement {
       canStart: this.#state.canStart,
       canUndo: this.#state.canUndo,
       canRestart: this.#state.canRestart,
+      canOfferDraw: this.#state.canOfferDraw,
+      canResign: this.#state.canResign,
+      allowDraw: this.#state.allowDraw,
+      allowResign: this.#state.allowResign,
       started: this.#state.started,
       connectionState: this.#state.connectionState,
     };

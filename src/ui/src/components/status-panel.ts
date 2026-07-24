@@ -16,6 +16,7 @@ const defaultState: StatusPanelState = {
   readySelf: false,
   readyPeer: false,
   pendingAction: null,
+  outcome: null,
   sessionId: "default-session",
   historyLength: 0,
   lastStart: null,
@@ -30,6 +31,19 @@ const turnLabel = (owner: StatusPanelState["turnOwner"]) => {
     return "Peer turn";
   }
   return "Waiting";
+};
+
+const outcomeLabel = (outcome: StatusPanelState["outcome"]) => {
+  if (!outcome) return null;
+  if (outcome.kind === "draw") {
+    return outcome.reason === "agreement"
+      ? "Draw by agreement"
+      : "Draw by mutual resignation";
+  }
+  const subject = outcome.winner === "local" ? "You win" : "Peer wins";
+  return outcome.reason === "resignation"
+    ? `${subject} by resignation`
+    : subject;
 };
 
 const readinessLabel = (
@@ -151,6 +165,7 @@ export class P2PLockstepStatusPanelElement extends HTMLElement {
 
   render() {
     const { connected, pendingAction } = this.#state;
+    const outcome = outcomeLabel(this.#state.outcome);
     const connection = connectionDisplay(
       connected,
       this.#state.connectionState,
@@ -166,7 +181,9 @@ export class P2PLockstepStatusPanelElement extends HTMLElement {
         : this.#state.lastStart === "remote"
           ? "Peer"
           : "Not started";
-    const timelineSummary = `${this.#state.historyLength} move${this.#state.historyLength === 1 ? "" : "s"} / ${starterLabel}`;
+    const timelineSummary =
+      outcome ??
+      `${this.#state.historyLength} move${this.#state.historyLength === 1 ? "" : "s"} / ${starterLabel}`;
 
     this.className = "block";
     this.innerHTML = `
@@ -238,6 +255,11 @@ export class P2PLockstepStatusPanelElement extends HTMLElement {
                 ${
                   pendingAction
                     ? `<span class="rounded-full border border-[var(--lock-border-strong)] bg-[var(--lock-pending-bg)] px-2.5 py-1 text-[0.68rem] text-[var(--lock-bronze-bright)]">Pending ${pendingAction}</span>`
+                    : ""
+                }
+                ${
+                  outcome
+                    ? `<span class="rounded-full border border-[var(--lock-border-strong)] bg-[var(--lock-pending-bg)] px-2.5 py-1 text-[0.68rem] text-[var(--lock-bronze-bright)]">${outcome}</span>`
                     : ""
                 }
               </div>
@@ -322,6 +344,11 @@ export class P2PLockstepStatusPanelElement extends HTMLElement {
                   ? `<span class="rounded-full border border-[var(--lock-border-strong)] bg-[var(--lock-pending-bg)] px-2 py-0.5 text-[0.64rem] text-[var(--lock-bronze-bright)]">Pending ${pendingAction}</span>`
                   : ""
               }
+              ${
+                outcome
+                  ? `<span class="rounded-full border border-[var(--lock-border-strong)] bg-[var(--lock-pending-bg)] px-2 py-0.5 text-[0.64rem] text-[var(--lock-bronze-bright)]">${outcome}</span>`
+                  : ""
+              }
             </div>
           </article>
         </div>
@@ -333,7 +360,7 @@ export class P2PLockstepStatusPanelElement extends HTMLElement {
     setText(
       this,
       "[data-mobile-turn]",
-      `#${this.#state.currentTurn} ${turnLabel(this.#state.turnOwner)}`,
+      outcome ?? `#${this.#state.currentTurn} ${turnLabel(this.#state.turnOwner)}`,
     );
     setText(this, "[data-mobile-ready]", readySummary);
     setText(this, "[data-detail-connection]", connection.label);
@@ -359,8 +386,16 @@ export class P2PLockstepStatusPanelElement extends HTMLElement {
     setText(this, "[data-match-meta]", timelineSummary);
     setText(this, "[data-error-message]", this.#state.lastError);
     setText(this, "[data-connection-state]", connection.detail);
-    setText(this, "[data-current-turn]", `#${this.#state.currentTurn}`);
-    setText(this, "[data-turn-owner]", turnLabel(this.#state.turnOwner));
+    setText(
+      this,
+      "[data-current-turn]",
+      outcome ?? `#${this.#state.currentTurn}`,
+    );
+    setText(
+      this,
+      "[data-turn-owner]",
+      outcome ? "Game over" : turnLabel(this.#state.turnOwner),
+    );
     setText(this, "[data-session-id]", this.#state.sessionId);
     setText(
       this,

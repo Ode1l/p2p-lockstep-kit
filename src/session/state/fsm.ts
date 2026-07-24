@@ -20,6 +20,8 @@ export type SessionEvent =
   | 'REMOTE_UNDO'
   | 'RESTART'
   | 'REMOTE_RESTART'
+  | 'REQUEST'
+  | 'REMOTE_REQUEST'
   | 'APPROVE'
   | 'REJECT'
   | 'GAME_OVER'
@@ -60,12 +62,16 @@ const transitions: Transition[] = [
   { from: 'remote_turn', event: 'UNDO', to: 'waiting_approval' },
   { from: 'turn', event: 'RESTART', to: 'waiting_approval' },
   { from: 'remote_turn', event: 'RESTART', to: 'waiting_approval' },
+  { from: 'turn', event: 'REQUEST', to: 'waiting_approval' },
+  { from: 'remote_turn', event: 'REQUEST', to: 'waiting_approval' },
 
   // Requests coming from remote (we need to approve)
   { from: 'turn', event: 'REMOTE_UNDO', to: 'approving' },
   { from: 'remote_turn', event: 'REMOTE_UNDO', to: 'approving' },
   { from: 'turn', event: 'REMOTE_RESTART', to: 'approving' },
   { from: 'remote_turn', event: 'REMOTE_RESTART', to: 'approving' },
+  { from: 'turn', event: 'REMOTE_REQUEST', to: 'approving' },
+  { from: 'remote_turn', event: 'REMOTE_REQUEST', to: 'approving' },
 
   // Approval outcomes when we were waiting for the peer.
   { from: 'waiting_approval', event: 'APPROVE', to: 'turn' },
@@ -81,6 +87,9 @@ const transitions: Transition[] = [
   // Game end resets back to the pre-match idle state
   { from: 'turn', event: 'GAME_OVER', to: 'idle' },
   { from: 'remote_turn', event: 'GAME_OVER', to: 'idle' },
+  { from: 'waiting_approval', event: 'GAME_OVER', to: 'idle' },
+  { from: 'approving', event: 'GAME_OVER', to: 'idle' },
+  { from: 'syncing', event: 'GAME_OVER', to: 'idle' },
 
   // Rejoin/sync flows
   { from: 'turn', event: 'SYNC', to: 'syncing' },

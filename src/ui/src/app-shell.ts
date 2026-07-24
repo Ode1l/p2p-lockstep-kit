@@ -21,6 +21,8 @@ const defaultState = (attrs?: {
   sessionId?: string;
   signalUrl?: string;
   theme?: ThemeMode;
+  allowDraw?: boolean;
+  allowResign?: boolean;
 }): AppState => ({
   screen: "pairing",
   theme: attrs?.theme || "light",
@@ -40,12 +42,17 @@ const defaultState = (attrs?: {
   canStart: false,
   canUndo: false,
   canRestart: false,
+  canOfferDraw: false,
+  canResign: false,
+  allowDraw: attrs?.allowDraw ?? false,
+  allowResign: attrs?.allowResign ?? false,
   started: false,
   currentTurn: 1,
   turnOwner: null,
   localState: "idle",
   remoteState: "idle",
   pendingAction: null,
+  outcome: null,
   historyLength: 0,
   lastStart: null,
   lastError: "",
@@ -101,12 +108,20 @@ type InternalObserver = RuntimeObserver & {
 
 export class P2PLockstepAppElement extends HTMLElement {
   static get observedAttributes() {
-    return ["game-title", "session-id", "signal-url", "theme"];
+    return [
+      "game-title",
+      "session-id",
+      "signal-url",
+      "theme",
+      "allow-draw",
+      "allow-resign",
+    ];
   }
 
   #ready = false;
   #state: AppState = defaultState();
   #dialogState: DialogState = defaultDialog;
+  #dialogAction: "approval" | "resign" | null = null;
   #toastState: ToastState = defaultToast;
   #pairingPage: P2PLockstepPairingPageElement | null = null;
   #gamePage: P2PLockstepGamePageElement | null = null;
@@ -134,6 +149,8 @@ export class P2PLockstepAppElement extends HTMLElement {
       sessionId: this.getAttribute("session-id") ?? undefined,
       signalUrl: this.getAttribute("signal-url") ?? undefined,
       theme,
+      allowDraw: this.hasAttribute("allow-draw"),
+      allowResign: this.hasAttribute("allow-resign"),
     });
     if (this.getAttribute("theme") !== theme) {
       this.setAttribute("theme", theme);
@@ -182,6 +199,14 @@ export class P2PLockstepAppElement extends HTMLElement {
     this.addEventListener(
       "lockstep-restart",
       this.#handleRestartEvent as EventListener,
+    );
+    this.addEventListener(
+      "lockstep-draw",
+      this.#handleDrawEvent as EventListener,
+    );
+    this.addEventListener(
+      "lockstep-resign",
+      this.#handleResignEvent as EventListener,
     );
     this.addEventListener(
       "lockstep-dialog-confirm",
@@ -243,6 +268,14 @@ export class P2PLockstepAppElement extends HTMLElement {
       this.#handleRestartEvent as EventListener,
     );
     this.removeEventListener(
+      "lockstep-draw",
+      this.#handleDrawEvent as EventListener,
+    );
+    this.removeEventListener(
+      "lockstep-resign",
+      this.#handleResignEvent as EventListener,
+    );
+    this.removeEventListener(
       "lockstep-dialog-confirm",
       this.#handleDialogConfirmEvent as EventListener,
     );
@@ -281,6 +314,12 @@ export class P2PLockstepAppElement extends HTMLElement {
     }
     if (name === "theme" && isThemeMode(newValue)) {
       this.#patchState({ theme: newValue });
+    }
+    if (name === "allow-draw") {
+      this.#patchState({ allowDraw: newValue !== null });
+    }
+    if (name === "allow-resign") {
+      this.#patchState({ allowResign: newValue !== null });
     }
   }
 
@@ -343,6 +382,8 @@ export class P2PLockstepAppElement extends HTMLElement {
         this.#session?.state.setGamePlugin(plugin),
       actions: {
         move: (data: unknown) => this.#session?.actions.move(data),
+        offerDraw: () => this.#session?.actions.offerDraw(),
+        resign: () => this.#session?.actions.resign(),
       },
       observer: {
         subscribe: (observer: RuntimeObserver) =>
@@ -531,18 +572,30 @@ export class P2PLockstepAppElement extends HTMLElement {
     const snapshotConnected = snapshot.connected;
     const readySelf = snapshot.localState === "ready";
     const readyPeer = snapshot.remoteState === "ready";
+    const matchActive =
+      !snapshot.outcome &&
+      (snapshot.localState === "turn" ||
+        snapshot.localState === "remote_turn");
     const canReady = snapshotConnected && snapshot.localState === "idle";
     const canStart = snapshotConnected && snapshot.localState === "could_start";
     const canUndo =
       snapshotConnected &&
-      (snapshot.localState === "turn" ||
-        snapshot.localState === "remote_turn") &&
+      matchActive &&
       !snapshot.pendingAction &&
       snapshot.history.length > 0;
     const canRestart =
       snapshotConnected &&
-      (snapshot.localState === "turn" ||
-        snapshot.localState === "remote_turn") &&
+      matchActive &&
+      !snapshot.pendingAction;
+    const canOfferDraw =
+      this.#state.allowDraw &&
+      snapshotConnected &&
+      matchActive &&
+      !snapshot.pendingAction;
+    const canResign =
+      this.#state.allowResign &&
+      snapshotConnected &&
+      matchActive &&
       !snapshot.pendingAction;
     const started =
       activeStates.includes(snapshot.localState) ||
@@ -565,6 +618,8 @@ export class P2PLockstepAppElement extends HTMLElement {
       canStart,
       canUndo,
       canRestart,
+      canOfferDraw,
+      canResign,
       screen: snapshotConnected ? "game" : this.#state.screen,
       started,
       currentTurn: snapshot.turn,
@@ -572,26 +627,41 @@ export class P2PLockstepAppElement extends HTMLElement {
       localState: snapshot.localState,
       remoteState: snapshot.remoteState,
       pendingAction: snapshot.pendingAction,
+      outcome: snapshot.outcome,
       historyLength: snapshot.history.length,
       lastStart: snapshot.lastStart,
     });
 
     if (snapshot.localState === "approving" && snapshot.pendingAction) {
+      this.#dialogAction = "approval";
+      const copy =
+        snapshot.pendingAction === "undo"
+          ? {
+              title: "Undo request pending",
+              description:
+                "Your peer wants to roll the match back. Approve the undo or reject it and keep the current board.",
+            }
+          : snapshot.pendingAction === "restart"
+            ? {
+                title: "Restart request pending",
+                description:
+                  "Your peer wants to restart the match. Approve to reset the board shell or reject to continue.",
+              }
+            : {
+                title: "Draw offer",
+                description:
+                  "Your peer has offered a draw. Accept to end the match as a draw or reject to continue playing.",
+              };
       this.#dialogState = {
         open: true,
-        title:
-          snapshot.pendingAction === "undo"
-            ? "Undo request pending"
-            : "Restart request pending",
-        description:
-          snapshot.pendingAction === "undo"
-            ? "Your peer wants to roll the match back. Approve the undo or reject it and keep the current board."
-            : "Your peer wants to restart the match. Approve to reset the board shell or reject to continue.",
-        confirmLabel: "Approve",
+        ...copy,
+        confirmLabel:
+          snapshot.pendingAction === "draw" ? "Accept draw" : "Approve",
         cancelLabel: "Reject",
       };
-    } else if (this.#dialogState.open) {
+    } else if (this.#dialogAction === "approval") {
       this.#dialogState = defaultDialog;
+      this.#dialogAction = null;
     }
 
     this.#syncUi();
@@ -687,12 +757,17 @@ export class P2PLockstepAppElement extends HTMLElement {
       canStart: this.#state.canStart,
       canUndo: this.#state.canUndo,
       canRestart: this.#state.canRestart,
+      canOfferDraw: this.#state.canOfferDraw,
+      canResign: this.#state.canResign,
+      allowDraw: this.#state.allowDraw,
+      allowResign: this.#state.allowResign,
       started: this.#state.started,
       currentTurn: this.#state.currentTurn,
       turnOwner: this.#state.turnOwner,
       localState: this.#state.localState,
       remoteState: this.#state.remoteState,
       pendingAction: this.#state.pendingAction,
+      outcome: this.#state.outcome,
       sessionId: this.#state.sessionId,
       historyLength: this.#state.historyLength,
       lastStart: this.#state.lastStart,
@@ -802,18 +877,47 @@ export class P2PLockstepAppElement extends HTMLElement {
     this.#showToast("Restart request sent.");
   };
 
+  #handleDrawEvent = () => {
+    if (!this.#state.canOfferDraw) return;
+    this.#session?.actions.offerDraw();
+    this.#showToast("Draw offer sent.");
+  };
+
+  #handleResignEvent = () => {
+    if (!this.#state.canResign) return;
+    this.#dialogAction = "resign";
+    this.#dialogState = {
+      open: true,
+      title: "Resign this match?",
+      description:
+        "Resigning ends the current match immediately and awards the win to your peer.",
+      confirmLabel: "Resign",
+      cancelLabel: "Keep playing",
+    };
+    this.#syncUi();
+  };
+
   #handleDialogConfirmEvent = () => {
-    this.#session?.actions.approve();
+    if (this.#dialogAction === "resign") {
+      this.#session?.actions.resign();
+      this.#showToast("You resigned the match.");
+    } else {
+      this.#session?.actions.approve();
+      this.#showToast("Request approved.");
+    }
+    this.#dialogAction = null;
     this.#dialogState = defaultDialog;
     this.#syncUi();
-    this.#showToast("Request approved.");
   };
 
   #handleDialogCancelEvent = () => {
-    this.#session?.actions.reject();
+    if (this.#dialogAction === "approval") {
+      this.#session?.actions.reject();
+      this.#showToast("Request rejected.");
+    }
+    this.#dialogAction = null;
     this.#dialogState = defaultDialog;
     this.#syncUi();
-    this.#showToast("Request rejected.");
   };
 
   #handleVisibilityChange = () => {

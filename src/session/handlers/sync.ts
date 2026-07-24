@@ -1,7 +1,7 @@
 import type { CommandListener } from '../commandBus';
 import { getState, send } from '../context';
-import type { PlayerLabel, TurnEntry } from '../state/state';
-import { consoleLogger } from '../utils';
+import type { GameOutcome, PlayerLabel, TurnEntry } from '../state/state';
+import { consoleLogger } from '../../utils';
 
 const fromPeerPerspective = (player: PlayerLabel): PlayerLabel =>
   player === 'local' ? 'remote' : 'local';
@@ -11,6 +11,7 @@ type SyncPayload = {
   lastStart?: PlayerLabel | null;
   turn?: PlayerLabel;
   resumeTurn?: PlayerLabel | null;
+  outcome?: GameOutcome | null;
 };
 
 const getCurrentTurn = (): PlayerLabel => {
@@ -30,6 +31,7 @@ const buildSyncPayload = (): SyncPayload => {
     lastStart: state.getLastStart(),
     turn,
     resumeTurn: state.getResumeTurn(),
+    outcome: state.getOutcome(),
   };
 };
 
@@ -106,6 +108,13 @@ const restoreFromPayload = (
     state.setLastStart(null);
   }
 
+  const mappedOutcome: GameOutcome | null = payload.outcome
+    ? payload.outcome.kind === 'win'
+      ? { ...payload.outcome, winner: mapPlayer(payload.outcome.winner) }
+      : payload.outcome
+    : null;
+  state.setOutcome(mappedOutcome);
+
   const nextPlayer = payload.resumeTurn
     ? mapPlayer(payload.resumeTurn)
     : payload.turn
@@ -123,7 +132,12 @@ const restoreFromPayload = (
     return;
   }
 
-  state.dispatchSyncComplete(nextPlayer);
+  if (mappedOutcome) {
+    state.dispatch('local', 'GAME_OVER');
+    state.dispatch('remote', 'GAME_OVER');
+  } else {
+    state.dispatchSyncComplete(nextPlayer);
+  }
 };
 
 /**

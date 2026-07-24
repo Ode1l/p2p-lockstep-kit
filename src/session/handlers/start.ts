@@ -1,7 +1,7 @@
 import type { CommandListener } from '../commandBus';
 import { getState, send } from '../context';
 import type { PlayerLabel } from '../state/state';
-import { consoleLogger } from '../utils';
+import { consoleLogger } from '../../utils';
 
 /**
  * Determine next starter (turn order rotation)
@@ -51,6 +51,7 @@ export const start: CommandListener = (command) => {
       state.clearHistory();
       consoleLogger.debug('[session:start] cleared previous match history');
     }
+    state.setOutcome(null);
     state.setLastStart(nextStarter);
     state.dispatch('local', 'START', localTarget);
     state.dispatch('remote', 'REMOTE_START', remoteTarget);
@@ -93,6 +94,7 @@ export const start: CommandListener = (command) => {
     state.clearHistory();
     consoleLogger.debug('[session:start] cleared previous match history');
   }
+  state.setOutcome(null);
   state.setLastStart(starter);
   state.dispatch('local', 'REMOTE_START', localTarget);
   state.dispatch('remote', 'START', remoteTarget);

@@ -1,6 +1,6 @@
 import type { State } from './state/state';
 import type { CommandBus } from './commandBus';
-import type { SessionMessage } from './utils';
+import type { SessionMessage } from '../utils';
 import { NetClient } from './net';
 
 /**
@@ -107,3 +107,4 @@ export const getSid = () => requireContext().getSid();
  */
 export const send = (message: SessionMessage) =>
   requireContext().getNet().send(message);
+

@@ -1,0 +1,264 @@
+@import "tailwindcss";
+
+:root {
+  --chess-bg: #0c0d0c;
+  --chess-surface: #111411;
+  --chess-paper: #f1ead8;
+  --chess-muted: #a6aa9f;
+  --chess-border: rgba(224, 209, 172, 0.2);
+  --chess-brass: #c7a253;
+  --chess-light: #e8dfca;
+  --chess-dark: #2e4b37;
+  --chess-last: rgba(199, 162, 83, 0.47);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+body {
+  background: var(--chess-bg);
+}
+
+p2p-lockstep-app {
+  --lock-bg: var(--chess-bg);
+  --lock-bg-soft: #101210;
+  --lock-surface: #121512;
+  --lock-surface-strong: #171a17;
+  --lock-border: var(--chess-border);
+  --lock-border-strong: rgba(224, 209, 172, 0.34);
+  --lock-paper: var(--chess-paper);
+  --lock-muted: var(--chess-muted);
+  --lock-primary-bg: #b99042;
+  --lock-primary-text: #10110f;
+}
+
+.chess-stage {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(8.5rem, 12rem);
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0.75rem 1rem;
+  align-items: start;
+  justify-content: center;
+  width: min(100%, calc(100svh - 4rem), 62rem);
+  min-width: 0;
+  margin-inline: auto;
+  padding: 0.75rem;
+  color: var(--chess-paper);
+}
+
+.chess-status {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  min-height: 2.25rem;
+  color: var(--chess-paper);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(0.9rem, 2vw, 1.05rem);
+  letter-spacing: 0.01em;
+}
+
+.status-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: var(--chess-brass);
+  box-shadow: 0 0 0 3px rgba(199, 162, 83, 0.12);
+}
+
+.chess-board {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  width: min(100%, calc(100svh - 13rem), 46rem);
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 1px solid rgba(224, 209, 172, 0.32);
+  border-radius: 0.35rem;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.46), 0 0 0 6px rgba(8, 10, 8, 0.5);
+  touch-action: manipulation;
+}
+
+.chess-square {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 0;
+  color: #151714;
+  cursor: pointer;
+  font: inherit;
+  isolation: isolate;
+}
+
+.chess-square.light { background: var(--chess-light); }
+.chess-square.dark { background: var(--chess-dark); }
+.chess-square[data-last]::before,
+.chess-square[data-selected]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--chess-last);
+}
+.chess-square[data-selected]::before {
+  box-shadow: inset 0 0 0 3px var(--chess-brass);
+  background: rgba(199, 162, 83, 0.58);
+}
+.chess-square[data-legal]::after {
+  content: "";
+  position: absolute;
+  width: 22%;
+  aspect-ratio: 1;
+  border-radius: 999px;
+  background: rgba(34, 58, 42, 0.68);
+  box-shadow: 0 0 0 2px rgba(241, 234, 216, 0.26);
+}
+.chess-square[data-capture]::after {
+  width: 72%;
+  background: transparent;
+  border: clamp(2px, 0.45vw, 4px) solid rgba(199, 162, 83, 0.86);
+  box-shadow: none;
+}
+.chess-square:focus-visible {
+  z-index: 3;
+  outline: 3px solid #f4c866;
+  outline-offset: -3px;
+}
+.chess-board[data-disabled] .chess-square { cursor: default; }
+
+.chess-piece {
+  z-index: 1;
+  font-family: "Apple Symbols", "Segoe UI Symbol", "Noto Sans Symbols 2", serif;
+  font-size: clamp(1.75rem, 8.6cqw, 4.9rem);
+  line-height: 1;
+  transform: translateY(-1%);
+  filter: drop-shadow(0 2px 1px rgba(0, 0, 0, 0.25));
+  user-select: none;
+}
+.chess-piece.white {
+  color: #f5edda;
+  -webkit-text-stroke: clamp(0.7px, 0.13vw, 1.4px) #151714;
+}
+.chess-piece.black {
+  color: #111310;
+  -webkit-text-stroke: clamp(0.3px, 0.08vw, 0.8px) #e7dcbf;
+}
+.file-label,
+.rank-label {
+  position: absolute;
+  z-index: 2;
+  font-size: clamp(0.5rem, 1.2cqw, 0.72rem);
+  font-weight: 700;
+  opacity: 0.72;
+  pointer-events: none;
+}
+.file-label { right: 0.25rem; bottom: 0.15rem; }
+.rank-label { left: 0.25rem; top: 0.14rem; }
+
+.captured-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  padding: 1rem;
+  border: 1px solid var(--chess-border);
+  border-radius: 0.7rem;
+  background: rgba(17, 20, 17, 0.8);
+}
+.captured-rail[hidden] { display: none; }
+.captured-group {
+  display: grid;
+  gap: 0.35rem;
+  min-height: 3.7rem;
+  padding-bottom: 0.8rem;
+  border-bottom: 1px solid var(--chess-border);
+}
+.captured-group:last-child { padding-bottom: 0; border-bottom: 0; }
+.captured-group span {
+  color: var(--chess-muted);
+  font-size: 0.7rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.captured-group strong {
+  min-height: 1.7rem;
+  color: var(--chess-paper);
+  font-family: "Apple Symbols", "Segoe UI Symbol", serif;
+  font-size: 1.45rem;
+  font-weight: 400;
+  letter-spacing: -0.1em;
+}
+
+.promotion-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(7, 8, 7, 0.7);
+  backdrop-filter: blur(8px);
+}
+.promotion-layer[hidden] { display: none; }
+.promotion-dialog {
+  width: min(100%, 22rem);
+  padding: 1.2rem;
+  border: 1px solid rgba(224, 209, 172, 0.36);
+  border-radius: 0.8rem;
+  background: #151815;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.56);
+  text-align: center;
+}
+.promotion-dialog p {
+  margin: 0 0 1rem;
+  font: 1.25rem/1.2 Georgia, "Times New Roman", serif;
+}
+.promotion-choices { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; }
+.promotion-choices button {
+  aspect-ratio: 1;
+  border: 1px solid var(--chess-border);
+  border-radius: 0.45rem;
+  background: var(--chess-light);
+  color: #111310;
+  font: 2.4rem/1 "Apple Symbols", "Segoe UI Symbol", serif;
+  cursor: pointer;
+}
+.promotion-choices button:hover,
+.promotion-choices button:focus-visible { border-color: var(--chess-brass); outline: 2px solid var(--chess-brass); }
+.promotion-cancel {
+  margin-top: 0.8rem;
+  border: 0;
+  background: transparent;
+  color: var(--chess-muted);
+  font: 600 0.82rem/1.2 inherit;
+  cursor: pointer;
+}
+
+@media (max-width: 720px) {
+  .chess-stage {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    gap: 0.55rem;
+    padding: 0.25rem;
+  }
+  .chess-status { order: 0; min-height: 2rem; }
+  .chess-board { order: 1; width: min(100%, calc(100svh - 14rem)); }
+  .captured-rail {
+    order: 2;
+    width: 100%;
+    flex-direction: row;
+    padding: 0.65rem 0.8rem;
+    border-radius: 0.55rem;
+  }
+  .captured-group { flex: 1; min-width: 0; min-height: 2.8rem; padding: 0; border: 0; }
+  .captured-group + .captured-group { padding-left: 0.75rem; border-left: 1px solid var(--chess-border); }
+  .captured-group strong { font-size: 1.15rem; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chess-piece { transition: transform 120ms ease; }
+  .chess-square:hover .chess-piece { transform: translateY(-3%) scale(1.035); }
+}

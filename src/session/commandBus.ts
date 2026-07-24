@@ -1,4 +1,4 @@
-import { consoleLogger, SessionMessage, SessionMessageType } from './utils';
+import { consoleLogger, SessionMessage, SessionMessageType } from '../utils';
 
 export type CommandOrigin = 'local' | 'remote';
 export type BusMessageType =

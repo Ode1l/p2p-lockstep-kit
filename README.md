@@ -1,6 +1,6 @@
 # p2p-lockstep-kit
 
-`p2p-lockstep-kit` is a browser-first toolkit for deterministic, one-to-one,
+`p2p-lockstep-kit` is a browser-first toolkit for deterministic, one-to-one or multiplayer,
 turn-based games over WebRTC DataChannel. It provides direct peer pairing,
 Ready/Start/undo/restart flows, ordered move history, reconnect synchronization,
 responsive Web Components, and a game-plugin boundary for rules and rendering.
@@ -98,14 +98,14 @@ game application
             └─ WebRTC DataChannel/data plane
 ```
 
-The current product is direct 1v1 pairing. It has no public lobby, room browser,
+The current product is direct pairing. It has no public lobby, room browser,
 matchmaking service, or server-owned game state. Signaling exchanges WebRTC
 connection information but does not become the game authority.
 
-Supporting three or more players is a separate protocol design involving stable
-participant identity, membership, multi-peer topology, ordering, conflict
-resolution, private state, and new sync semantics. It is not implemented by
-looping over the current `remote` player.
+Supporting three or more players extends the protocol with stable participant
+identity, membership, multi-peer topology, and ordered broadcast semantics. See
+the [`p2p-lockstep-kit-network`](https://www.npmjs.com/package/p2p-lockstep-kit-network)
+package for the current signaling and peer-group support.
 
 ## Run the Gomoku reference application
 
@@ -131,6 +131,15 @@ directory; a static application does not require Wrangler.
 - Mobile and desktop layouts are both first-class targets.
 - The current plugin represents a winner but not a draw; extend the generic
   Session outcome contract for draws rather than inventing a fake winner.
+
+## Playground Demos
+
+| Game | Demo |
+| --- | --- |
+| Mahjong | [mahjong.jiahengli.xyz](https://mahjong.jiahengli.xyz) |
+| Gomoku | [gomoku.jiahengli.xyz](https://gomoku.jiahengli.xyz) |
+| Chess | [chess.jiahengli.xyz](https://chess.jiahengli.xyz) |
+| Xiangqi | [xiangqi.jiahengli.xyz](https://xiangqi.jiahengli.xyz) |
 
 ## Repository layout
 

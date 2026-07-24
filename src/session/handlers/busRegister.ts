@@ -7,6 +7,8 @@ import { sync } from './sync';
 import { undo } from './undo';
 import { restart } from './restart';
 import { offline } from './offLine';
+import { pendingRequest } from './pendingRequest';
+import { resign } from './resign';
 
 export const registerHandlers = (bus: CommandBus) => {
   bus.register('READY', ready);
@@ -14,6 +16,8 @@ export const registerHandlers = (bus: CommandBus) => {
   bus.register('MOVE', move);
   bus.register('UNDO', undo);
   bus.register('RESTART', restart);
+  bus.register('REQUEST', pendingRequest);
+  bus.register('RESIGN', resign);
   bus.register('SYNC_REQUEST', sync);
   bus.register('SYNC_STATE', sync);
   bus.register('OFFLINE', offline);

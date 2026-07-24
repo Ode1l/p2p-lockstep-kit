@@ -1,0 +1,66 @@
+{
+  "name": "p2p-lockstep-kit-multiui",
+  "version": "0.1.0",
+  "description": "Framework-free multiplayer lobby and game shell for p2p-lockstep-kit-multisession.",
+  "keywords": [
+    "p2p",
+    "webrtc",
+    "multiplayer",
+    "web-components",
+    "turn-based"
+  ],
+  "license": "GPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Ode1l/p2p-lockstep-kit-multiui.git"
+  },
+  "homepage": "https://github.com/Ode1l/p2p-lockstep-kit-multiui#readme",
+  "bugs": {
+    "url": "https://github.com/Ode1l/p2p-lockstep-kit-multiui/issues"
+  },
+  "type": "module",
+  "sideEffects": [
+    "./dist/style.css"
+  ],
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./style.css": "./dist/style.css"
+  },
+  "scripts": {
+    "dev": "vite build --watch",
+    "prepack": "pnpm build",
+    "prepublishOnly": "pnpm release:verify",
+    "build": "vite build && tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "pack:check": "node scripts/package-smoke.mjs",
+    "release:verify": "pnpm typecheck && pnpm test && pnpm build && pnpm pack:check",
+    "release:check": "npm publish --dry-run"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4"
+  },
+  "peerDependencies": {
+    "p2p-lockstep-kit-multisession": "^0.1.0"
+  },
+  "devDependencies": {
+    "@types/qrcode": "^1.5.6",
+    "p2p-lockstep-kit-multisession": "^0.1.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.1.0",
+    "vitest": "^4.1.9"
+  },
+  "packageManager": "pnpm@11.7.0"
+}

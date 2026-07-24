@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en" class="min-w-80 bg-[#0c0d0c] [color-scheme:dark]">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="Play a private peer-to-peer game of Chinese chess." />
+    <meta name="theme-color" content="#0c0d0c" />
+    <link rel="icon" href="data:," />
+    <title>Xiangqi</title>
+  </head>
+  <body class="m-0 min-w-80 bg-[#0c0d0c]">
+    <p2p-lockstep-app
+      id="xiangqi-app"
+      class="block min-h-svh"
+      game-title="Xiangqi"
+      session-id="xiangqi"
+      theme="dark"
+      allow-resign
+    ></p2p-lockstep-app>
+    <noscript>This application requires JavaScript.</noscript>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

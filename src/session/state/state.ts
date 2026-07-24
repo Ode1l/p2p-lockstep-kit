@@ -6,7 +6,7 @@ import type {
   IStateObserver,
 } from '../observer';
 import { DefaultGamePlugin, StateObserverManager } from '../observer';
-import { consoleLogger } from '../utils';
+import { consoleLogger } from '../../utils';
 
 export type TurnEntry = {
   turn: number;
@@ -15,7 +15,18 @@ export type TurnEntry = {
 };
 
 export type PlayerLabel = 'local' | 'remote';
-export type PendingAction = 'undo' | 'restart' | null;
+export type PendingActionId = 'undo' | 'restart' | 'draw';
+export type PendingAction = PendingActionId | null;
+export type GameOutcome =
+  | {
+      kind: 'win';
+      winner: PlayerLabel;
+      reason: 'rules' | 'resignation';
+    }
+  | {
+      kind: 'draw';
+      reason: 'agreement' | 'mutual_resignation';
+    };
 
 export class State {
   // will update map when multi-players (>=3)
@@ -31,6 +42,7 @@ export class State {
   private pendingUndoCount: 1 | 2 | null = null;
   private resumeTurn: PlayerLabel | null = null;
   private lastStart: PlayerLabel | null = null;
+  private outcome: GameOutcome | null = null;
 
   // Game plugin for rule validation and win checking
   private gamePlugin: IGamePlugin = new DefaultGamePlugin();
@@ -207,6 +219,19 @@ export class State {
     return this.resumeTurn;
   }
 
+  public setOutcome(outcome: GameOutcome | null): void {
+    consoleLogger.debug('[session:state] outcome set', {
+      from: this.outcome,
+      to: outcome,
+    });
+    this.outcome = outcome;
+    this.notifyStateChanged();
+  }
+
+  public getOutcome(): GameOutcome | null {
+    return this.outcome;
+  }
+
   private getPlayerFsm(player: PlayerLabel): SessionFsm {
     return player === 'local' ? this.local : this.remote;
   }
@@ -265,7 +290,7 @@ export class State {
     this.notifyStateChanged();
   }
 
-  // ===== Helper Methods for Undo/Restart Request Handling =====
+  // ===== Helper Methods for Approval Request Handling =====
 
   /**
    * Save game state snapshot for undo/restart operations
@@ -335,6 +360,18 @@ export class State {
     });
   }
 
+  public initializePendingRequest(
+    action: Exclude<PendingActionId, 'undo' | 'restart'>,
+    resumeTurn: PlayerLabel,
+  ): void {
+    this.pendingAction = action;
+    this.resumeTurn = resumeTurn;
+    consoleLogger.debug('[session:state] approval request initialized', {
+      action,
+      resumeTurn,
+    });
+  }
+
   /**
    * Check if pending action is undo
    */
@@ -374,6 +411,7 @@ export class State {
     this.local = new SessionFsm('idle');
     this.remote = new SessionFsm('idle');
     this.lastStart = null;
+    this.outcome = null;
     this.pendingAction = null;
     this.pendingUndoCount = null;
     this.resumeTurn = null;
@@ -542,6 +580,18 @@ export class State {
       history: gameState.history.length,
     });
     return winner;
+  }
+
+  public completeGame(outcome: GameOutcome): void {
+    this.setOutcome(outcome);
+    if (this.canAction('local', 'GAME_OVER')) {
+      this.dispatch('local', 'GAME_OVER');
+    }
+    if (this.canAction('remote', 'GAME_OVER')) {
+      this.dispatch('remote', 'GAME_OVER');
+    }
+    this.clearPendingStates();
+    this.cleanupGame();
   }
 
   /**

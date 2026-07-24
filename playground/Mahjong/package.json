@@ -1,0 +1,34 @@
+{
+  "name": "mahjong",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Four-player Sichuan Mahjong over p2p-lockstep-kit-multisession.",
+  "license": "GPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Ode1l/Mahjong.git"
+  },
+  "homepage": "https://github.com/Ode1l/Mahjong#readme",
+  "bugs": {
+    "url": "https://github.com/Ode1l/Mahjong/issues"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "pnpm typecheck && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "verify:packages": "node scripts/verify-packages.mjs"
+  },
+  "dependencies": {
+    "p2p-lockstep-kit-multisession": "^0.1.0",
+    "p2p-lockstep-kit-multiui": "^0.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vite": "^8.1.0",
+    "vitest": "^4.1.9"
+  },
+  "packageManager": "pnpm@11.7.0"
+}

@@ -1,6 +1,6 @@
 import type { CommandListener } from '../commandBus';
 import { getBus, getState } from '../context';
-import { consoleLogger } from '../utils';
+import { consoleLogger } from '../../utils';
 
 /**
  * Handle connection state changes (OFFLINE/ONLINE)
